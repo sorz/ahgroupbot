@@ -1,10 +1,20 @@
 use futures::StreamExt;
+use lazy_static::lazy_static;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     env,
 };
 use telegram_bot::*;
 use tokio;
+
+lazy_static! {
+    static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
+        include_str!("stickers.txt")
+            .lines()
+            .filter(|l| !l.starts_with("#") && !l.is_empty())
+            .collect()
+    };
+}
 
 #[derive(Default)]
 struct PolicyState {
@@ -41,6 +51,13 @@ impl PolicyState {
                     return false; // 啊+ only
                 }
                 data.len() / 3
+            }
+            MessageKind::Sticker { ref data, .. } => {
+                if ALLOWED_STICKER_FILE_IDS.contains(data.file_id.as_str()) {
+                    1 // Reset noa to 1
+                } else {
+                    return false; // Sticker not whitelisted
+                }
             }
             MessageKind::NewChatTitle { .. }
             | MessageKind::NewChatPhoto { .. }

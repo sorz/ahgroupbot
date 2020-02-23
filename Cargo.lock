@@ -5,6 +5,7 @@ name = "ahgroupbot"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "lazy_static",
  "telegram-bot",
  "tokio",
 ]
