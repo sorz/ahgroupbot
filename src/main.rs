@@ -74,7 +74,9 @@ async fn main() -> Result<(), Error> {
         // println!("update: {:?}", update);
         if let UpdateKind::Message(message) = update?.kind {
             if !policy.is_accept(&message) {
-                api.send(message.delete()).await?;
+                if let Err(err) = api.send(message.delete()).await {
+                    println!("Error on deleting: {:?}", err);
+                }
             }
         }
     }
