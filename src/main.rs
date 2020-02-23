@@ -36,8 +36,7 @@ impl PolicyState {
                 }
                 data.len() / 3
             }
-            MessageKind::NewChatMembers { .. }
-            | MessageKind::NewChatTitle { .. }
+            MessageKind::NewChatTitle { .. }
             | MessageKind::NewChatPhoto { .. }
             | MessageKind::DeleteChatPhoto { .. }
             | MessageKind::MigrateToChatId { .. }
