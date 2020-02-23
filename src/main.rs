@@ -1,6 +1,8 @@
 use futures::StreamExt;
-use std::collections::{hash_map::Entry, HashMap};
-use std::env;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    env,
+};
 use telegram_bot::*;
 use tokio;
 
@@ -20,16 +22,20 @@ impl PolicyState {
         Default::default()
     }
 
-    fn is_accept(&mut self, message: &Message) -> bool {
+    fn is_message_allowed(&mut self, message: &Message) -> bool {
         let chat_id = match message.chat {
             MessageChat::Group(Group { id, .. }) => ChatId::Group(id),
             MessageChat::Supergroup(Supergroup { id, .. }) => ChatId::Supergroup(id),
             _ => return true, // Take action on groups only
         };
         let noa = match message.kind {
-            MessageKind::Text { ref data, ref entities, .. } => {
+            MessageKind::Text {
+                ref data,
+                ref entities,
+                ..
+            } => {
                 if !entities.is_empty() {
-                    return false;
+                    return false; // No links, formatting, etc.
                 }
                 if !data.chars().all(|c| c == '啊') {
                     return false; // 啊+ only
@@ -40,8 +46,8 @@ impl PolicyState {
             | MessageKind::NewChatPhoto { .. }
             | MessageKind::DeleteChatPhoto { .. }
             | MessageKind::MigrateToChatId { .. }
-            | MessageKind::MigrateFromChatId  { .. }
-            | MessageKind::PinnedMessage { .. } => return true, // Allow them 
+            | MessageKind::MigrateFromChatId { .. }
+            | MessageKind::PinnedMessage { .. } => return true, // Allow them
             _ => return false, // Delete other messages
         };
         let uid = message.from.id;
@@ -66,19 +72,14 @@ impl PolicyState {
             }
         }
     }
-}
 
-async fn handle_update(api: &Api, policy: &mut PolicyState, update: Update) -> Result<(), Error> {
-    match update.kind {
-        UpdateKind::Message(message) => {
-            if !policy.is_accept(&message) {
-                api.send(message.delete()).await?
-            }
+    fn get_message_to_delete(&mut self, update: Update) -> Option<Message> {
+        match update.kind {
+            UpdateKind::Message(message) if !self.is_message_allowed(&message) => Some(message),
+            UpdateKind::EditedMessage(message) => return Some(message),
+            _ => None,
         }
-        UpdateKind::EditedMessage(message) => api.send(message.delete()).await?,
-        _ => (),
     }
-    Ok(())
 }
 
 #[tokio::main]
@@ -91,8 +92,10 @@ async fn main() -> Result<(), Error> {
     let mut stream = api.stream();
     while let Some(update) = stream.next().await {
         println!("update: {:?}", update);
-        if let Err(err) = handle_update(&api, &mut policy, update?).await {
-            println!("Error: {:?}", err);
+        if let Some(message) = policy.get_message_to_delete(update?) {
+            if let Err(err) = api.send(message.delete()).await {
+                println!("Fail to delete: {:?}", err);
+            }
         }
     }
     Ok(())
