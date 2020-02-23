@@ -36,13 +36,14 @@ impl PolicyState {
                 }
                 data.len() / 3
             }
-            MessageKind::Audio { .. }
-            | MessageKind::Document { .. }
-            | MessageKind::Photo { .. }
-            | MessageKind::Sticker { .. }
-            | MessageKind::Contact { .. }
-            | MessageKind::Location { .. } => return false,
-            _ => return true, // Ingore other messages
+            MessageKind::NewChatMembers { .. }
+            | MessageKind::NewChatTitle { .. }
+            | MessageKind::NewChatPhoto { .. }
+            | MessageKind::DeleteChatPhoto { .. }
+            | MessageKind::MigrateToChatId { .. }
+            | MessageKind::MigrateFromChatId  { .. }
+            | MessageKind::PinnedMessage { .. } => return true, // Allow them 
+            _ => return false, // Delete other messages
         };
         let uid = message.from.id;
         if message.reply_to_message.is_some() {
@@ -90,7 +91,7 @@ async fn main() -> Result<(), Error> {
 
     let mut stream = api.stream();
     while let Some(update) = stream.next().await {
-        // println!("update: {:?}", update);
+        println!("update: {:?}", update);
         if let Err(err) = handle_update(&api, &mut policy, update?).await {
             println!("Error: {:?}", err);
         }
