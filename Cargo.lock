@@ -916,7 +916,7 @@ dependencies = [
 [[package]]
 name = "telegram-bot"
 version = "0.7.0"
-source = "git+https://github.com/telegram-rs/telegram-bot#8e363c518d135f4e95ee18969d3d9d6e0b5ba75e"
+source = "git+https://github.com/sorz/telegram-bot?branch=patch-sticker-unique-id#bb6d896e7fbb1d9c53760efdba2e90a12bcbfe35"
 dependencies = [
  "bytes",
  "futures",
@@ -932,7 +932,7 @@ dependencies = [
 [[package]]
 name = "telegram-bot-raw"
 version = "0.7.0"
-source = "git+https://github.com/telegram-rs/telegram-bot#8e363c518d135f4e95ee18969d3d9d6e0b5ba75e"
+source = "git+https://github.com/sorz/telegram-bot?branch=patch-sticker-unique-id#bb6d896e7fbb1d9c53760efdba2e90a12bcbfe35"
 dependencies = [
  "bytes",
  "serde",

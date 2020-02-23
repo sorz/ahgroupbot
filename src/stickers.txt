@@ -1,0 +1,7 @@
+# file_unique_id of allowed stickers, one id per line
+
+# PusheenJJ Ahahahaha 
+AgADrwQAAjbsGwU
+
+# AAAAA GIF
+AgADJQADaX7FLQ

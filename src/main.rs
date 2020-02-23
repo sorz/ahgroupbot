@@ -53,7 +53,7 @@ impl PolicyState {
                 data.len() / 3
             }
             MessageKind::Sticker { ref data, .. } => {
-                if ALLOWED_STICKER_FILE_IDS.contains(data.file_id.as_str()) {
+                if ALLOWED_STICKER_FILE_IDS.contains(data.file_unique_id.as_str()) {
                     1 // Reset noa to 1
                 } else {
                     return false; // Sticker not whitelisted
