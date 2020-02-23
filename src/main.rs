@@ -42,6 +42,9 @@ impl PolicyState {
             _ => return true, // Ingore other messages
         };
         let uid = message.from.id;
+        if message.reply_to_message.is_some() {
+            return false; // No reply
+        }
         match self.group_user_noa.entry(chat_id) {
             Entry::Vacant(entry) => {
                 entry.insert((uid, noa));
