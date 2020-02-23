@@ -27,7 +27,10 @@ impl PolicyState {
             _ => return true, // Take action on groups only
         };
         let noa = match message.kind {
-            MessageKind::Text { ref data, .. } => {
+            MessageKind::Text { ref data, ref entities, .. } => {
+                if !entities.is_empty() {
+                    return false;
+                }
                 if !data.chars().all(|c| c == '啊') {
                     return false; // 啊+ only
                 }
