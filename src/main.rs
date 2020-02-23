@@ -62,6 +62,19 @@ impl PolicyState {
     }
 }
 
+async fn handle_update(api: &Api, policy: &mut PolicyState, update: Update) -> Result<(), Error> {
+    match update.kind {
+        UpdateKind::Message(message) => {
+            if !policy.is_accept(&message) {
+                api.send(message.delete()).await?
+            }
+        }
+        UpdateKind::EditedMessage(message) => api.send(message.delete()).await?,
+        _ => (),
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
@@ -72,12 +85,8 @@ async fn main() -> Result<(), Error> {
     let mut stream = api.stream();
     while let Some(update) = stream.next().await {
         // println!("update: {:?}", update);
-        if let UpdateKind::Message(message) = update?.kind {
-            if !policy.is_accept(&message) {
-                if let Err(err) = api.send(message.delete()).await {
-                    println!("Error on deleting: {:?}", err);
-                }
-            }
+        if let Err(err) = handle_update(&api, &mut policy, update?).await {
+            println!("Error: {:?}", err);
         }
     }
     Ok(())
