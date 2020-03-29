@@ -11,7 +11,7 @@ lazy_static! {
     static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
         include_str!("stickers.txt")
             .lines()
-            .filter(|l| !l.starts_with("#") && !l.is_empty())
+            .filter(|l| !l.starts_with('#') && !l.is_empty())
             .collect()
     };
 }
@@ -93,7 +93,7 @@ impl PolicyState {
     fn get_message_to_delete(&mut self, update: Update) -> Option<Message> {
         match update.kind {
             UpdateKind::Message(message) if !self.is_message_allowed(&message) => Some(message),
-            UpdateKind::EditedMessage(message) => return Some(message),
+            UpdateKind::EditedMessage(message) => Some(message),
             _ => None,
         }
     }
