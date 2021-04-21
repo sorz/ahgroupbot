@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use lazy_static::lazy_static;
+use log::{debug, info, warn};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     env,
@@ -108,17 +109,17 @@ impl PolicyState {
 
 #[tokio::main]
 async fn main() -> Result<(), RequestError> {
+    env_logger::init();
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
     let bot = Bot::new(token).auto_send();
-
     let mut policy = PolicyState::new();
-
     let mut stream = Box::pin(polling_default(bot.clone()));
+    info!("AhGroupBot started");
     while let Some(update) = stream.next().await {
-        println!("update: {:?}", update);
+        debug!("update: {:?}", update);
         if let Some((chat_id, msg_id)) = policy.get_message_to_delete(update?) {
             if let Err(err) = bot.delete_message(chat_id, msg_id).await {
-                println!("Fail to delete: {:?}", err);
+                warn!("Fail to delete [{}:{}]: {:?}", chat_id, msg_id, err);
             }
         }
     }
