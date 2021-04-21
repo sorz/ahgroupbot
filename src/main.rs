@@ -4,8 +4,12 @@ use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     env,
 };
-use telegram_bot::*;
-use tokio;
+use teloxide::{
+    dispatching::update_listeners::polling_default,
+    prelude::*,
+    types::{ChatKind, MessageKind, Update, UpdateKind},
+    RequestError,
+};
 
 lazy_static! {
     static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
@@ -20,57 +24,52 @@ lazy_static! {
 struct PolicyState {
     group_user_noa: HashMap<ChatId, (UserId, usize)>,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum ChatId {
-    Group(GroupId),
-    Supergroup(SupergroupId),
-}
+type ChatId = i64;
+type UserId = i64;
+type MessageId = i32;
 
 impl PolicyState {
     fn new() -> Self {
         Default::default()
     }
 
-    fn is_message_allowed(&mut self, message: &Message) -> bool {
-        let chat_id = match message.chat {
-            MessageChat::Group(Group { id, .. }) => ChatId::Group(id),
-            MessageChat::Supergroup(Supergroup { id, .. }) => ChatId::Supergroup(id),
-            _ => return true, // Take action on groups only
+    fn is_message_allowed(&mut self, chat_id: ChatId, message: &Message) -> bool {
+        match message.kind {
+            // Allow some of system messages
+            MessageKind::NewChatTitle(_)
+            | MessageKind::NewChatPhoto(_)
+            | MessageKind::DeleteChatPhoto(_)
+            | MessageKind::Migrate(_)
+            | MessageKind::Pinned(_) => return true,
+            // Check normal messages
+            MessageKind::Common(_) => (),
+            // Delete others
+            _ => return false,
+        }
+        let uid = match message.from() {
+            // No (other) bots
+            Some(user) if user.is_bot => return false,
+            Some(user) => user.id,
+            None => return false,
         };
-        let noa = match message.kind {
-            MessageKind::Text {
-                ref data,
-                ref entities,
-                ..
-            } => {
-                if !entities.is_empty() {
-                    return false; // No links, formatting, etc.
-                }
-                if !data.chars().all(|c| c == '啊') {
-                    return false; // 啊+ only
-                }
-                data.len() / 3
-            }
-            MessageKind::Sticker { ref data, .. } => {
-                if ALLOWED_STICKER_FILE_IDS.contains(data.file_unique_id.as_str()) {
-                    1 // Reset noa to 1
-                } else {
-                    return false; // Sticker not whitelisted
-                }
-            }
-            MessageKind::NewChatTitle { .. }
-            | MessageKind::NewChatPhoto { .. }
-            | MessageKind::DeleteChatPhoto { .. }
-            | MessageKind::MigrateToChatId { .. }
-            | MessageKind::MigrateFromChatId { .. }
-            | MessageKind::PinnedMessage { .. } => return true, // Allow them
-            _ => return false, // Delete other messages
-        };
-        let uid = message.from.id;
-        if message.reply_to_message.is_some() {
+        if message.reply_to_message().is_some() {
             return false; // No reply
         }
+        if !message.entities().unwrap_or(&[]).is_empty() {
+            return false; // No links, formatting, etc.
+        }
+        let noa = match message.text() {
+            None => match message.sticker() {
+                // Treat allowed sticker as single 啊
+                Some(sticker) if ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file_unique_id) => 1,
+                // No neither-text-or-allowed-sticker messages
+                _ => return false,
+            },
+            // 啊+ only
+            Some(text) if !text.chars().all(|c| c == '啊') => return false,
+            // Each 啊 takes 3 bytes as UTF-8
+            Some(text) => text.len() / 3,
+        };
         match self.group_user_noa.entry(chat_id) {
             Entry::Vacant(entry) => {
                 entry.insert((uid, noa));
@@ -90,27 +89,35 @@ impl PolicyState {
         }
     }
 
-    fn get_message_to_delete(&mut self, update: Update) -> Option<Message> {
-        match update.kind {
-            UpdateKind::Message(message) if !self.is_message_allowed(&message) => Some(message),
-            UpdateKind::EditedMessage(message) => Some(message),
-            _ => None,
+    fn get_message_to_delete(&mut self, update: Update) -> Option<(ChatId, MessageId)> {
+        let chat = update.chat()?;
+        if let ChatKind::Public(_) = chat.kind {
+            match update.kind {
+                UpdateKind::Message(ref msg) if !self.is_message_allowed(chat.id, msg) => {
+                    Some((chat.id, msg.id))
+                }
+                UpdateKind::EditedMessage(ref msg) => Some((chat.id, msg.id)),
+                _ => None,
+            }
+        } else {
+            // Take action on groups only
+            None
         }
     }
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<(), RequestError> {
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
-    let api = Api::new(token);
+    let bot = Bot::new(token).auto_send();
 
     let mut policy = PolicyState::new();
 
-    let mut stream = api.stream();
+    let mut stream = Box::pin(polling_default(bot.clone()));
     while let Some(update) = stream.next().await {
         println!("update: {:?}", update);
-        if let Some(message) = policy.get_message_to_delete(update?) {
-            if let Err(err) = api.send(message.delete()).await {
+        if let Some((chat_id, msg_id)) = policy.get_message_to_delete(update?) {
+            if let Err(err) = bot.delete_message(chat_id, msg_id).await {
                 println!("Fail to delete: {:?}", err);
             }
         }

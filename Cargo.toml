@@ -5,7 +5,7 @@ authors = ["sorz <me@sorz.org>"]
 edition = "2018"
 
 [dependencies]
-telegram-bot = { git="https://github.com/telegram-rs/telegram-bot" }
-tokio = { version="0.2", features=["macros"] }
+teloxide = { version = "0.4", features = ["auto-send", "native-tls"] }
+tokio = { version = "1.5", features = ["macros", "rt-multi-thread"] }
 futures = "0.3"
 lazy_static = "1.4"
