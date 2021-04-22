@@ -17,6 +17,7 @@ violate the policy. Messages on private chat will be ignored.
 - No rich text (incl. links, bold, etc.)
 - No bot
 - The number of 啊 on single post is at most it in the last post plus one
+  - Except `啊`, `啊啊`, `啊啊啊`, and stickers, which can be posted at anytime
   - Allowed stickers is treat as single 啊
 
 ## Library used
