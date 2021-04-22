@@ -4,13 +4,16 @@ use log::{debug, info, warn};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     env,
+    sync::Arc,
 };
 use teloxide::{
     dispatching::update_listeners::polling_default,
     prelude::*,
     types::{ChatKind, MessageKind, Update, UpdateKind},
-    RequestError,
 };
+use tokio::sync::Semaphore;
+
+static MAX_DELETE_CONCURRENCY: usize = 20;
 
 lazy_static! {
     static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
@@ -108,19 +111,26 @@ impl PolicyState {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), RequestError> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
     let bot = Bot::new(token).auto_send();
     let mut policy = PolicyState::new();
+    let limit = Arc::new(Semaphore::new(MAX_DELETE_CONCURRENCY));
     let mut stream = Box::pin(polling_default(bot.clone()));
     info!("AhGroupBot started");
     while let Some(update) = stream.next().await {
         debug!("update: {:?}", update);
         if let Some((chat_id, msg_id)) = policy.get_message_to_delete(update?) {
-            if let Err(err) = bot.delete_message(chat_id, msg_id).await {
-                warn!("Fail to delete [{}:{}]: {:?}", chat_id, msg_id, err);
-            }
+            let permit = limit.clone().acquire_owned().await;
+            let bot_ = bot.clone();
+            tokio::spawn(async move {
+                info!("Deleting [{}:{}]", chat_id, msg_id);
+                if let Err(err) = bot_.delete_message(chat_id, msg_id).await {
+                    warn!("Fail to delete [{}:{}]: {:?}", chat_id, msg_id, err);
+                }
+                drop(permit);
+            });
         }
     }
     Ok(())
