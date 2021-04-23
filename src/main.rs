@@ -7,13 +7,14 @@ use teloxide::{dispatching::update_listeners::polling_default, prelude::*};
 // Avoid unlimited concurrent requests sending to Telegram server.
 // Not sure if it is necessary, set as a safeguard anyway.
 const MAX_OUTSTANDING_REQUESTS: usize = 30;
+const MAX_RETRY: usize = 5;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
     let bot = Bot::new(token);
-    let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS);
+    let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
     let mut policy = PolicyState::new();
     let mut stream = Box::pin(polling_default(bot.clone()));
     info!("AhGroupBot started");
