@@ -5,7 +5,7 @@ authors = ["sorz <me@sorz.org>"]
 edition = "2018"
 
 [dependencies]
-teloxide = { version = "0.4", features = ["auto-send", "native-tls"] }
+teloxide = "0.4"
 tokio = { version = "1.5", features = ["macros", "rt-multi-thread", "sync"] }
 futures = "0.3"
 lazy_static = "1.4"
