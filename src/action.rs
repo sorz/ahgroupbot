@@ -13,12 +13,12 @@ const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone)]
 pub struct Actions {
     bot: Bot,
-    max_retry: usize,
+    max_retry: u32,
     outstanding_limit: Arc<Semaphore>,
 }
 
 impl Actions {
-    pub fn new(bot: &Bot, max_outstanding_requests: usize, max_retry: usize) -> Self {
+    pub fn new(bot: &Bot, max_outstanding_requests: usize, max_retry: u32) -> Self {
         Self {
             bot: bot.clone(),
             max_retry,
@@ -51,9 +51,9 @@ async fn delete_message(
     bot: Bot,
     mut chat_id: ChatId,
     msg_id: MessageId,
-    max_retry: usize,
+    max_retry: u32,
 ) -> Result<(), RequestError> {
-    let mut retry: usize = 0;
+    let mut retry: u32 = 0;
     loop {
         match bot.delete_message(chat_id, msg_id).send().await {
             Ok(_) => break Ok(()),
@@ -67,7 +67,7 @@ async fn delete_message(
             }
             Err(RequestError::NetworkError(err)) if retry < max_retry => {
                 warn!("Delayed deleting due to network error: {}", err);
-                sleep(RETRY_BASE_DELAY * 2u32.pow(retry.try_into().unwrap())).await;
+                sleep(RETRY_BASE_DELAY * 2u32.pow(retry)).await;
             }
             Err(RequestError::MigrateToChatId(new_chat_id)) if retry < max_retry => {
                 chat_id = new_chat_id;
