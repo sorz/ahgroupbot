@@ -72,12 +72,7 @@ impl PolicyState {
             if noa > 3 && noa > last_noa + 1 {
                 return false; // No too many ah in a single message
             }
-        } else {
-            // For group w/o history, allow anyone send 啊 whose noa <= 3
-            if noa > 3 {
-                return false;
-            }
-        }
+        } // For group w/o history, anyone & any noa is allowed
         self.put_user_noa(chat_id, uid, noa);
         true
     }
