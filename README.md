@@ -20,10 +20,28 @@ violate the policy. Messages on private chat will be ignored.
   - Except `啊`, `啊啊`, `啊啊啊`, and stickers, which can be posted at anytime
   - Allowed stickers is treat as single 啊
 
-## Library used
+## Configuration
+
+Required environment variables:
+
+- `TELEGRAM_BOT_TOKEN` - Telegram bot token
+
+Optional environment variables:
+
+- `STATE_DIRECTORY` - Where to store bot state, default to current working
+  directory.
+- `RUST_LOG` - Adjust log level, see
+  [env_logger](https://rust-lang.github.io/log/env_logger/).
+
+## Libraries used
 
 - [teloxide](https://github.com/teloxide/teloxide): An elegant Telegram bots
   framework for Rust
 
 [telegram-bot](https://github.com/telegram-rs/telegram-bot) was used but has
 been replaced by teloxide due to lack of maintenance.
+
+## See also
+
+- HEX Counter
+  ([Sodium-Aluminate/CountTo0xffffffff](https://github.com/Sodium-Aluminate/CountTo0xffffffff))
