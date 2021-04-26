@@ -1,6 +1,8 @@
 use crate::{ChatId, MessageId, UserId};
+use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use log::warn;
+use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
 use teloxide::types::{ChatKind, Message, MessageKind, Update, UpdateKind};
 
 lazy_static! {
@@ -12,14 +14,16 @@ lazy_static! {
     };
 }
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct PolicyState {
-    group_user_noa: HashMap<ChatId, (UserId, usize)>,
+    db: sled::Db,
 }
 
 impl PolicyState {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, sled::Error> {
+        Ok(Self {
+            db: sled::open(db_path)?,
+        })
     }
 
     fn is_message_allowed(&mut self, chat_id: ChatId, message: &Message) -> bool {
@@ -47,6 +51,7 @@ impl PolicyState {
         if !message.entities().unwrap_or(&[]).is_empty() {
             return false; // No links, formatting, etc.
         }
+        // Count the number of ah (noa)
         let noa = match message.text() {
             None => match message.sticker() {
                 // Treat allowed sticker as single 啊
@@ -57,25 +62,24 @@ impl PolicyState {
             // 啊+ only
             Some(text) if !text.chars().all(|c| c == '啊') => return false,
             // Each 啊 takes 3 bytes as UTF-8
-            Some(text) => text.len() / 3,
+            Some(text) => (text.len() / 3).try_into().expect("Toooooo mmmany ah"),
         };
-        match self.group_user_noa.entry(chat_id) {
-            Entry::Vacant(entry) => {
-                entry.insert((uid, noa));
-                true // Allow any user & any noa if we lost tracking
+
+        if let Some((last_uid, last_noa)) = self.get_user_noa(chat_id) {
+            if last_uid == uid {
+                return false; // No single-user flooding
             }
-            Entry::Occupied(mut entry) => {
-                let (last_uid, last_noa) = entry.get();
-                if last_uid == &uid {
-                    return false; // No single-user flooding
-                }
-                if noa > 3 && noa > last_noa + 1 {
-                    return false; // No too many ah in a single message
-                }
-                entry.insert((uid, noa));
-                true
+            if noa > 3 && noa > last_noa + 1 {
+                return false; // No too many ah in a single message
+            }
+        } else {
+            // For group w/o history, allow anyone send 啊 whose noa <= 3
+            if noa > 3 {
+                return false;
             }
         }
+        self.put_user_noa(chat_id, uid, noa);
+        true
     }
 
     pub fn get_message_to_delete(&mut self, update: Update) -> Option<(ChatId, MessageId)> {
@@ -92,5 +96,48 @@ impl PolicyState {
             // Take action on groups only
             None
         }
+    }
+
+    fn get_user_noa(&self, cid: ChatId) -> Option<(UserId, u32)> {
+        let mut key = format!("uid-{}", cid);
+        let uid = self
+            .db
+            .get(&key)
+            .expect("Error during read policy state (uid)")
+            .map(|bytes| (&*bytes).read_i64::<LE>());
+
+        key.clear();
+        write!(&mut key, "noa-{}", cid).unwrap();
+        let noa = self
+            .db
+            .get(&key)
+            .expect("Error during read policy state (noa)")
+            .map(|bytes| (&*bytes).read_u32::<LE>());
+
+        match (uid, noa) {
+            (Some(Ok(uid)), Some(Ok(noa))) => Some((uid, noa)),
+            (None, _) | (_, None) => None,
+            (Some(Err(err)), _) | (_, Some(Err(err))) => {
+                warn!("Broken data on policy state (uid and/or noa): {}", err);
+                None
+            }
+        }
+    }
+
+    fn put_user_noa(&self, cid: ChatId, uid: UserId, noa: u32) {
+        let mut key = format!("uid-{}", cid);
+        let mut buf = vec![];
+        buf.write_i64::<LE>(uid).unwrap();
+        self.db
+            .insert(&key, &*buf)
+            .expect("Error during write policy state (uid)");
+
+        key.clear();
+        buf.clear();
+        write!(&mut key, "noa-{}", cid).unwrap();
+        buf.write_u32::<LE>(noa).unwrap();
+        self.db
+            .insert(&key, &*buf)
+            .expect("Error during write policy state (noa)");
     }
 }

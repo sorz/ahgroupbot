@@ -16,9 +16,15 @@ const RETRY_BASE_DELAY: Duration = Duration::from_secs(2);
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
+    let mut db_path = env::var("STATE_DIRECTORY")
+        .map(|p| p.into())
+        .or_else(|_| env::current_dir())
+        .expect("STATE_DIRECTORY not a valid path");
+    db_path.push("state.sled-db");
+
     let bot = Bot::new(token);
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
-    let mut policy = PolicyState::new();
+    let mut policy = PolicyState::new(&db_path).expect("Failed to open/create policy state file");
     let mut stream = Box::pin(polling_default(bot.clone()));
     let mut retry_count = 0u32;
     info!("AhGroupBot started");
