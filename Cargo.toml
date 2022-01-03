@@ -13,3 +13,7 @@ log = "0.4"
 env_logger = "0.8"
 sled = "0.34"
 byteorder = "1.4"
+
+[patch.crates-io]
+teloxide-core = { git = "https://github.com/sorz/teloxide-core", branch = "fix-message-entity-spolier" }
+

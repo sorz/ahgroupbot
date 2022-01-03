@@ -1275,9 +1275,8 @@ dependencies = [
 
 [[package]]
 name = "teloxide-core"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114c9057a3a2f74d937ece64029b362f583a69fb4b7405722c6dc03cd5bb4658"
+version = "0.3.3"
+source = "git+https://github.com/sorz/teloxide-core?branch=fix-message-entity-spolier#5fb99bd44b3f05a4f2bb7d2104abb6e9b8f40c91"
 dependencies = [
  "bytes",
  "chrono",
