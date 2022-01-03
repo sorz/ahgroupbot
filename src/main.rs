@@ -2,7 +2,7 @@ use ahgroupbot::{Actions, PolicyState};
 use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{env, time::Duration};
-use teloxide::{dispatching::update_listeners::polling_default, prelude::*, RequestError};
+use teloxide::{dispatching::update_listeners::{polling_default, AsUpdateStream}, prelude::*, RequestError};
 use tokio::time::sleep;
 
 // Avoid unlimited concurrent requests sending to Telegram server.
@@ -25,7 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bot = Bot::new(token);
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
     let mut policy = PolicyState::new(&db_path).expect("Failed to open/create policy state file");
-    let mut stream = Box::pin(polling_default(bot.clone()));
+    let mut poll = polling_default(bot.clone()).await;
+    let mut stream = Box::pin(poll.as_stream());
     let mut retry_count = 0u32;
     info!("AhGroupBot started");
     while let Some(update) = stream.next().await {
