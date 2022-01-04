@@ -3,7 +3,9 @@ use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
 use log::{info, warn};
 use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
-use teloxide::types::{ChatKind, ChatMemberKind, Message, MessageKind, Update, UpdateKind, User};
+use teloxide::types::{
+    ChatKind, ChatMemberKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User,
+};
 
 lazy_static! {
     static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
@@ -50,8 +52,22 @@ impl PolicyState {
         if message.reply_to_message().is_some() {
             return false; // No reply
         }
-        if !message.entities().unwrap_or(&[]).is_empty() {
-            return false; // No links, formatting, etc.
+        if message
+            .entities()
+            .unwrap_or(&[])
+            .iter()
+            .any(|entity| match entity.kind {
+                MessageEntityKind::Bold
+                | MessageEntityKind::Underline
+                | MessageEntityKind::Italic
+                | MessageEntityKind::Code
+                | MessageEntityKind::Strikethrough
+                | MessageEntityKind::Spoiler => false,
+                _ => true,
+            })
+        {
+            // Whitelist stylish text but no clickable things like URL, mention, etc.
+            return false;
         }
         // Count the number of ah (noa)
         let noa = match message.text() {
