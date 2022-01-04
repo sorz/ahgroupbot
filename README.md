@@ -14,11 +14,20 @@ violate the policy. Messages on private chat will be ignored.
   - A few allowed stickers
 - No double posting
 - No editing
-- No rich text (incl. links, bold, etc.)
+- No links
 - No bot
 - The number of 啊 on single post is at most it in the last post plus one
   - Except `啊`, `啊啊`, `啊啊啊`, and stickers, which can be posted at anytime
   - Allowed stickers is treat as single 啊
+
+## Anit-spammer rules
+
+New member of a group should send at least one message containing 啊 or allowed
+stickers in their first few messages, otherwise they will be banned by the bot.
+
+Members already in the group before the bot join and members who has posted at
+least one allowed message would never be banned regardless the number of
+disallowed messages they sent.
 
 ## Configuration
 
