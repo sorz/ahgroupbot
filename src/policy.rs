@@ -1,9 +1,9 @@
 use crate::{ChatId, MessageId, UserId};
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
-use log::warn;
+use log::{info, warn};
 use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
-use teloxide::types::{ChatKind, Message, MessageKind, Update, UpdateKind};
+use teloxide::types::{ChatKind, ChatMemberKind, Message, MessageKind, Update, UpdateKind, User};
 
 lazy_static! {
     static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
@@ -17,12 +17,14 @@ lazy_static! {
 #[derive(Debug)]
 pub struct PolicyState {
     db: sled::Db,
+    count_to_ban: u32,
 }
 
 impl PolicyState {
-    pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self, sled::Error> {
+    pub fn new<P: AsRef<Path>>(db_path: P, count_to_ban: u32) -> Result<Self, sled::Error> {
         Ok(Self {
             db: sled::open(db_path)?,
+            count_to_ban,
         })
     }
 
@@ -73,11 +75,47 @@ impl PolicyState {
                 return false; // No too many ah in a single message
             }
         } // For group w/o history, anyone & any noa is allowed
+
         self.put_user_noa(chat_id, uid, noa);
+        self.stop_trace_user(chat_id, uid); // Now a trusted user
         true
     }
 
-    pub fn get_message_to_delete(&mut self, update: Update) -> Option<(ChatId, MessageId)> {
+    fn is_message_likely_spam<'a>(
+        &mut self,
+        chat_id: ChatId,
+        message: &'a Message,
+    ) -> Option<&'a User> {
+        match (&message.kind, message.from()) {
+            (MessageKind::Common(_), Some(sender)) => {
+                if let Some(sticker) = message.sticker() {
+                    if !ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file_unique_id) {
+                        Some(sender)
+                    } else {
+                        None
+                    }
+                } else if let Some(text) = message.text() {
+                    if !text.contains('啊') {
+                        info!(
+                            "[{}] Potential spam [{}]({}): {}",
+                            chat_id,
+                            sender.id,
+                            sender.full_name(),
+                            text
+                        );
+                        Some(sender)
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(sender)
+                }
+            }
+            _ => None, // Ignore messages other than common message
+        }
+    }
+
+    pub fn get_message_to_delete(&mut self, update: &Update) -> Option<(ChatId, MessageId)> {
         let chat = update.chat()?;
         if let ChatKind::Public(_) = chat.kind {
             match update.kind {
@@ -91,6 +129,44 @@ impl PolicyState {
             // Take action on groups only
             None
         }
+    }
+
+    pub fn get_user_to_ban(&mut self, update: &Update) -> Option<(ChatId, UserId)> {
+        let chat = update.chat()?;
+        if let ChatKind::Public(_) = chat.kind {
+            match update.kind {
+                UpdateKind::Message(ref msg) => {
+                    if let Some(spammer) = self.is_message_likely_spam(chat.id, msg) {
+                        if self.should_ban_user(chat.id, spammer.id) {
+                            return Some((chat.id, spammer.id));
+                        }
+                    }
+                }
+                UpdateKind::ChatMember(ref msg) => match msg.new_chat_member.kind {
+                    ChatMemberKind::Member => {
+                        info!(
+                            "[{}] New user [{}]({}) join",
+                            chat.id,
+                            msg.from.id,
+                            msg.from.full_name(),
+                        );
+                        self.new_user_join(chat.id, msg.from.id);
+                    }
+                    ChatMemberKind::Left | ChatMemberKind::Banned(_) => {
+                        info!(
+                            "[{}] User [{}]({}) left",
+                            chat.id,
+                            msg.from.id,
+                            msg.from.full_name(),
+                        );
+                        self.stop_trace_user(chat.id, msg.from.id);
+                    }
+                    _ => (),
+                },
+                _ => (),
+            }
+        }
+        None
     }
 
     fn get_user_noa(&self, cid: ChatId) -> Option<(UserId, u32)> {
@@ -134,5 +210,45 @@ impl PolicyState {
         self.db
             .insert(&key, &*buf)
             .expect("Error during write policy state (noa)");
+    }
+
+    fn new_user_join(&self, cid: ChatId, uid: UserId) {
+        let key = format!("untrust-uid-{}-{}", cid, uid);
+        let mut buf = vec![];
+        buf.write_u32::<LE>(0).unwrap();
+        self.db
+            .insert(&key, &*buf)
+            .expect("Error during write policy state (unstrust uid)");
+    }
+
+    fn stop_trace_user(&self, cid: ChatId, uid: UserId) {
+        let key = format!("untrust-uid-{}-{}", cid, uid);
+        self.db
+            .remove(key)
+            .expect("Error during write policy state (remove untrust uid)");
+    }
+
+    pub fn should_ban_user(&self, cid: ChatId, uid: UserId) -> bool {
+        let key = format!("untrust-uid-{}-{}", cid, uid);
+        let buf = self
+            .db
+            .update_and_fetch(key, |v| {
+                if let Some(mut v) = v {
+                    let mut n = v.read_u32::<LE>().unwrap();
+                    n += 1;
+                    Some(n.to_le_bytes().to_vec())
+                } else {
+                    None
+                }
+            })
+            .expect("Error during update policy state (untrust uid)");
+        if let Some(buf) = buf {
+            buf.as_ref()
+                .read_u32::<LE>()
+                .expect("Error during read polify state")
+                >= self.count_to_ban
+        } else {
+            false
+        }
     }
 }

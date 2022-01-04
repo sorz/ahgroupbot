@@ -2,7 +2,11 @@ use ahgroupbot::{Actions, PolicyState};
 use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{env, time::Duration};
-use teloxide::{dispatching::update_listeners::{polling_default, AsUpdateStream}, prelude::*, RequestError};
+use teloxide::{
+    dispatching::update_listeners::{polling_default, AsUpdateStream},
+    prelude::*,
+    RequestError,
+};
 use tokio::time::sleep;
 
 // Avoid unlimited concurrent requests sending to Telegram server.
@@ -11,6 +15,7 @@ const MAX_OUTSTANDING_REQUESTS: usize = 30;
 
 const MAX_RETRY: u32 = 5;
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(2);
+const COUNT_TO_BAN: u32 = 4;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bot = Bot::new(token);
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
-    let mut policy = PolicyState::new(&db_path).expect("Failed to open/create policy state file");
+    let mut policy =
+        PolicyState::new(&db_path, COUNT_TO_BAN).expect("Failed to open/create policy state file");
     let mut poll = polling_default(bot.clone()).await;
     let mut stream = Box::pin(poll.as_stream());
     let mut retry_count = 0u32;
@@ -44,8 +50,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(err) => return Err(err.into()),
         };
-        if let Some((chat_id, msg_id)) = policy.get_message_to_delete(update) {
+        if let Some((chat_id, msg_id)) = policy.get_message_to_delete(&update) {
             actions.spwan_delete_message(chat_id, msg_id).await;
+        }
+        if let Some((chat_id, user_id)) = policy.get_user_to_ban(&update) {
+            actions.spawn_ban_user(chat_id, user_id).await;
         }
     }
     Ok(())

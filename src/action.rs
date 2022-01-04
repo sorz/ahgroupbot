@@ -6,7 +6,7 @@ use teloxide::{
 };
 use tokio::{sync::Semaphore, time::sleep};
 
-use crate::{ChatId, MessageId};
+use crate::{ChatId, MessageId, UserId};
 
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
@@ -38,9 +38,26 @@ impl Actions {
         let bot = self.bot.clone();
         let max_retry = self.max_retry;
         tokio::spawn(async move {
-            info!("Deleting [{}:{}]", chat_id, msg_id);
+            info!("[{}] Deleting [{}]", chat_id, msg_id);
             if let Err(err) = delete_message(bot, chat_id, msg_id, max_retry).await {
-                warn!("Failed to delete [{}:{}]: {:?}", chat_id, msg_id, err);
+                warn!("[{}] Failed to delete [{}]: {:?}", chat_id, msg_id, err);
+            }
+            drop(permit);
+        });
+    }
+
+    pub async fn spawn_ban_user(&self, chat_id: ChatId, user_id: UserId) {
+        let permit = self
+            .outstanding_limit
+            .clone()
+            .acquire_owned()
+            .await
+            .unwrap(); // Semaphore never get closed
+        let bot = self.bot.clone();
+        tokio::spawn(async move {
+            info!("[{}] Ban user [{}]", chat_id, user_id);
+            if let Err(err) = ban_user(bot, chat_id, user_id).await {
+                warn!("[{}] Failed to ban [{}]: {:?}", chat_id, user_id, err);
             }
             drop(permit);
         });
@@ -98,4 +115,10 @@ async fn delete_message(
         }
         retry += 1;
     }
+}
+
+async fn ban_user(bot: Bot, chat_id: ChatId, user_id: UserId) -> Result<(), RequestError> {
+    // No retry here. Ban them next time.
+    bot.ban_chat_member(chat_id, user_id).send().await?;
+    Ok(())
 }
