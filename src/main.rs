@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 retry_count = 0;
                 update
             }
-            Err(RequestError::NetworkError(err)) if retry_count < MAX_RETRY => {
+            Err(RequestError::Network(err)) if retry_count < MAX_RETRY => {
                 warn!("Netwrok error: {}", err);
                 sleep(RETRY_BASE_DELAY * 2u32.pow(retry_count)).await;
                 retry_count += 1;

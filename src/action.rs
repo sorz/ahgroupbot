@@ -82,29 +82,22 @@ async fn delete_message(
                     .unwrap_or(RETRY_BASE_DELAY);
                 sleep(delay).await;
             }
-            Err(RequestError::NetworkError(err)) if retry < max_retry => {
+            Err(RequestError::Network(err)) if retry < max_retry => {
                 warn!("Delayed deleting due to network error: {}", err);
                 sleep(RETRY_BASE_DELAY * 2u32.pow(retry)).await;
             }
             Err(RequestError::MigrateToChatId(new_chat_id)) if retry < max_retry => {
                 chat_id = new_chat_id;
             }
-            Err(RequestError::ApiError { kind: err, .. })
-                if err == ApiError::MessageToDeleteNotFound
-                    || err == ApiError::MessageIdInvalid =>
-            {
+            Err(RequestError::Api(ApiError::MessageToDeleteNotFound)) | Err(RequestError::Api(ApiError::MessageIdInvalid)) => {
                 debug!("Message [{}:{}] is already gone", chat_id, msg_id);
                 break Ok(());
             }
-            Err(RequestError::ApiError { kind: err, .. })
-                if err == ApiError::MessageCantBeDeleted =>
-            {
+            Err(RequestError::Api(ApiError::MessageCantBeDeleted)) => {
                 debug!("No enough rights to delete message in group {}", chat_id);
                 break Ok(()); // No treat as error since we the bot onwer can't help with it
             }
-            Err(RequestError::ApiError { kind: err, .. })
-                if err == ApiError::BotKicked || err == ApiError::ChatNotFound =>
-            {
+            Err(RequestError::Api(ApiError::BotKicked)) | Err(RequestError::Api(ApiError::ChatNotFound)) => {
                 debug!("Bot was kicked from group {}", chat_id);
                 break Ok(()); // No treat as error
             }

@@ -36,7 +36,6 @@ impl PolicyState {
             MessageKind::NewChatTitle(_)
             | MessageKind::NewChatPhoto(_)
             | MessageKind::DeleteChatPhoto(_)
-            | MessageKind::Migrate(_)
             | MessageKind::Pinned(_) => return true,
             // Check normal messages
             MessageKind::Common(_) => (),
