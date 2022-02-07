@@ -2,7 +2,7 @@
 name = "ahgroupbot"
 version = "0.3.0"
 authors = ["sorz <me@sorz.org>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 teloxide = "0.6"
