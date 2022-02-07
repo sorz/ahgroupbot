@@ -4,7 +4,7 @@ use log::{debug, info, warn};
 use std::{env, time::Duration};
 use teloxide::{
     dispatching::update_listeners::{polling_default, AsUpdateStream},
-    prelude::*,
+    prelude2::*,
     RequestError,
 };
 use tokio::time::sleep;
