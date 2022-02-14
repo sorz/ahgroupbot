@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use log::{info, warn};
 use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
 use teloxide::types::{
-    ChatKind, ChatMemberKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User,
+    ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User,
 };
 
 lazy_static! {
@@ -51,20 +51,17 @@ impl PolicyState {
         if message.reply_to_message().is_some() {
             return false; // No reply
         }
-        if message
-            .entities()
-            .unwrap_or(&[])
-            .iter()
-            .any(|entity| match entity.kind {
+        if message.entities().unwrap_or(&[]).iter().any(|entity| {
+            !matches!(
+                entity.kind,
                 MessageEntityKind::Bold
-                | MessageEntityKind::Underline
-                | MessageEntityKind::Italic
-                | MessageEntityKind::Code
-                | MessageEntityKind::Strikethrough
-                | MessageEntityKind::Spoiler => false,
-                _ => true,
-            })
-        {
+                    | MessageEntityKind::Underline
+                    | MessageEntityKind::Italic
+                    | MessageEntityKind::Code
+                    | MessageEntityKind::Strikethrough
+                    | MessageEntityKind::Spoiler
+            )
+        }) {
             // Whitelist stylish text but no clickable things like URL, mention, etc.
             return false;
         }
@@ -147,37 +144,36 @@ impl PolicyState {
     }
 
     pub fn get_user_to_ban(&mut self, update: &Update) -> Option<(ChatId, UserId)> {
-        let chat = update.chat()?;
-        if let ChatKind::Public(_) = chat.kind {
-            match update.kind {
-                UpdateKind::Message(ref msg) => {
-                    if let Some(spammer) = self.is_message_likely_spam(chat.id, msg) {
-                        if self.should_ban_user(chat.id, spammer.id) {
-                            return Some((chat.id, spammer.id));
+        if let UpdateKind::Message(ref message) = update.kind {
+            match message.kind {
+                MessageKind::NewChatMembers(ref members) => {
+                    for member in &members.new_chat_members {
+                        info!(
+                            "[{}] New user [{}]({}) join",
+                            message.chat.id,
+                            member.id,
+                            member.full_name(),
+                        );
+                        self.new_user_join(message.chat.id, member.id);
+                    }
+                }
+                MessageKind::Common(_) => {
+                    if let Some(spammer) = self.is_message_likely_spam(message.chat.id, message) {
+                        if self.should_ban_user(message.chat.id, spammer.id) {
+                            return Some((message.chat.id, spammer.id));
                         }
                     }
                 }
-                UpdateKind::ChatMember(ref msg) => match msg.new_chat_member.kind {
-                    ChatMemberKind::Member => {
-                        info!(
-                            "[{}] New user [{}]({}) join",
-                            chat.id,
-                            msg.from.id,
-                            msg.from.full_name(),
-                        );
-                        self.new_user_join(chat.id, msg.from.id);
-                    }
-                    ChatMemberKind::Left | ChatMemberKind::Banned(_) => {
-                        info!(
-                            "[{}] User [{}]({}) left",
-                            chat.id,
-                            msg.from.id,
-                            msg.from.full_name(),
-                        );
-                        self.stop_trace_user(chat.id, msg.from.id);
-                    }
-                    _ => (),
-                },
+                MessageKind::LeftChatMember(ref members) => {
+                    let member = &members.left_chat_member;
+                    info!(
+                        "[{}] User [{}]({}) left",
+                        message.chat.id,
+                        member.id,
+                        member.full_name(),
+                    );
+                    self.stop_trace_user(message.chat.id, member.id);
+                }
                 _ => (),
             }
         }

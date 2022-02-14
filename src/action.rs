@@ -89,7 +89,8 @@ async fn delete_message(
             Err(RequestError::MigrateToChatId(new_chat_id)) if retry < max_retry => {
                 chat_id = new_chat_id;
             }
-            Err(RequestError::Api(ApiError::MessageToDeleteNotFound)) | Err(RequestError::Api(ApiError::MessageIdInvalid)) => {
+            Err(RequestError::Api(ApiError::MessageToDeleteNotFound))
+            | Err(RequestError::Api(ApiError::MessageIdInvalid)) => {
                 debug!("Message [{}:{}] is already gone", chat_id, msg_id);
                 break Ok(());
             }
@@ -97,7 +98,8 @@ async fn delete_message(
                 debug!("No enough rights to delete message in group {}", chat_id);
                 break Ok(()); // No treat as error since we the bot onwer can't help with it
             }
-            Err(RequestError::Api(ApiError::BotKicked)) | Err(RequestError::Api(ApiError::ChatNotFound)) => {
+            Err(RequestError::Api(ApiError::BotKicked))
+            | Err(RequestError::Api(ApiError::ChatNotFound)) => {
                 debug!("Bot was kicked from group {}", chat_id);
                 break Ok(()); // No treat as error
             }
