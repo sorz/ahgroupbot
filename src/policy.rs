@@ -1,7 +1,7 @@
 use crate::MessageId;
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
-use log::{info, warn};
+use log::{info, warn, debug};
 use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
 use teloxide::types::{
     ChatId, ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User, UserId,
@@ -102,6 +102,13 @@ impl PolicyState {
             (MessageKind::Common(_), Some(sender)) => {
                 if let Some(sticker) = message.sticker() {
                     if !ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file_unique_id) {
+                        debug!(
+                            "[{}] Unknown sticker [{}]({}): {}",
+                            chat_id,
+                            sender.id,
+                            sender.full_name(),
+                            sticker.file_unique_id
+                        );
                         Some(sender)
                     } else {
                         None
