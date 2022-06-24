@@ -1,10 +1,10 @@
-use crate::{ChatId, MessageId, UserId};
+use crate::MessageId;
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
 use log::{info, warn};
 use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
 use teloxide::types::{
-    ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User,
+    ChatId, ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User, UserId,
 };
 
 lazy_static! {
@@ -186,7 +186,7 @@ impl PolicyState {
             .db
             .get(&key)
             .expect("Error during read policy state (uid)")
-            .map(|bytes| (&*bytes).read_i64::<LE>());
+            .map(|bytes| (&*bytes).read_u64::<LE>());
 
         key.clear();
         write!(&mut key, "noa-{}", cid).unwrap();
@@ -197,7 +197,7 @@ impl PolicyState {
             .map(|bytes| (&*bytes).read_u32::<LE>());
 
         match (uid, noa) {
-            (Some(Ok(uid)), Some(Ok(noa))) => Some((uid, noa)),
+            (Some(Ok(uid)), Some(Ok(noa))) => Some((UserId(uid), noa)),
             (None, _) | (_, None) => None,
             (Some(Err(err)), _) | (_, Some(Err(err))) => {
                 warn!("Broken data on policy state (uid and/or noa): {}", err);
@@ -209,7 +209,7 @@ impl PolicyState {
     fn put_user_noa(&self, cid: ChatId, uid: UserId, noa: u32) {
         let mut key = format!("uid-{}", cid);
         let mut buf = vec![];
-        buf.write_i64::<LE>(uid).unwrap();
+        buf.write_u64::<LE>(uid.0).unwrap();
         self.db
             .insert(&key, &*buf)
             .expect("Error during write policy state (uid)");

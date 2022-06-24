@@ -1,12 +1,13 @@
 use log::{debug, info, warn};
-use std::{convert::TryInto, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use teloxide::{
     requests::{Request, Requester},
+    types::{ChatId, UserId},
     ApiError, Bot, RequestError,
 };
 use tokio::{sync::Semaphore, time::sleep};
 
-use crate::{ChatId, MessageId, UserId};
+use crate::MessageId;
 
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 
@@ -38,9 +39,9 @@ impl Actions {
         let bot = self.bot.clone();
         let max_retry = self.max_retry;
         tokio::spawn(async move {
-            info!("[{}] Deleting [{}]", chat_id, msg_id);
+            info!("[{}] Deleting [{:?}]", chat_id, msg_id);
             if let Err(err) = delete_message(bot, chat_id, msg_id, max_retry).await {
-                warn!("[{}] Failed to delete [{}]: {:?}", chat_id, msg_id, err);
+                warn!("[{}] Failed to delete [{:?}]: {:?}", chat_id, msg_id, err);
             }
             drop(permit);
         });
@@ -74,12 +75,8 @@ async fn delete_message(
     loop {
         match bot.delete_message(chat_id, msg_id).send().await {
             Ok(_) => break Ok(()),
-            Err(RequestError::RetryAfter(secs)) if retry < max_retry => {
-                warn!("RetryAfter received, retry deleting after {} secs", secs);
-                let delay = secs
-                    .try_into()
-                    .map(Duration::from_secs)
-                    .unwrap_or(RETRY_BASE_DELAY);
+            Err(RequestError::RetryAfter(delay)) if retry < max_retry => {
+                warn!("RetryAfter received, retry deleting after {:?}", delay);
                 sleep(delay).await;
             }
             Err(RequestError::Network(err)) if retry < max_retry => {
@@ -87,7 +84,7 @@ async fn delete_message(
                 sleep(RETRY_BASE_DELAY * 2u32.pow(retry)).await;
             }
             Err(RequestError::MigrateToChatId(new_chat_id)) if retry < max_retry => {
-                chat_id = new_chat_id;
+                chat_id = ChatId(new_chat_id);
             }
             Err(RequestError::Api(ApiError::MessageToDeleteNotFound))
             | Err(RequestError::Api(ApiError::MessageIdInvalid)) => {
