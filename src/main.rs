@@ -1,7 +1,7 @@
 use ahgroupbot::{Actions, PolicyState};
 use futures::StreamExt;
 use log::{debug, info, warn};
-use std::{env, time::Duration};
+use std::{env, fs, path::PathBuf, time::Duration};
 use teloxide::{
     dispatching::update_listeners::{polling_default, AsUpdateStream},
     Bot, RequestError,
@@ -19,14 +19,25 @@ const COUNT_TO_BAN: u32 = 4;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let token = env::var("TELEGRAM_BOT_TOKEN").expect("TELEGRAM_BOT_TOKEN not set");
+    let mut token_path: PathBuf = env::var("CREDENTIALS_DIRECTORY")
+        .unwrap_or("./".into())
+        .into();
+    token_path.push("token");
+    let token = fs::read_to_string(&token_path).map_err(|e| {
+        eprintln!(
+            "fail to read token from $CREDENTIALS_DIRECTORY/token `{}`",
+            token_path.display()
+        );
+        e
+    })?;
+
     let mut db_path = env::var("STATE_DIRECTORY")
         .map(|p| p.into())
         .or_else(|_| env::current_dir())
         .expect("STATE_DIRECTORY not a valid path");
     db_path.push("state.sled-db");
 
-    let bot = Bot::new(token);
+    let bot = Bot::new(token.trim());
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
     let mut policy =
         PolicyState::new(&db_path, COUNT_TO_BAN).expect("Failed to open/create policy state file");

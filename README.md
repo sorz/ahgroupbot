@@ -31,12 +31,12 @@ disallowed messages they sent.
 
 ## Configuration
 
-Required environment variables:
-
-- `TELEGRAM_BOT_TOKEN` - Telegram bot token
+Save bot token as a file at `$CREDENTIALS_DIRECTORY/token`.
 
 Optional environment variables:
 
+- `CREDENTIALS_DIRECTORY` - Where to read `token` file, default to current
+  working directory.
 - `STATE_DIRECTORY` - Where to store bot state, default to current working
   directory.
 - `RUST_LOG` - Adjust log level, see
