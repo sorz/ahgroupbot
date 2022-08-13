@@ -1193,8 +1193,7 @@ dependencies = [
 [[package]]
 name = "teloxide-core"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0e8df1cb0387cccab019e9c1243ac9a7646ef75fac767644ceb1e6a6ddc5bc"
+source = "git+https://github.com/sorz/teloxide-core/?branch=custom-emoji#ad489c753efc7d5e0fedcd97950296f36356f5f5"
 dependencies = [
  "bitflags",
  "bytes",
