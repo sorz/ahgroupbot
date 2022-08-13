@@ -20,7 +20,7 @@ const COUNT_TO_BAN: u32 = 4;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let mut token_path: PathBuf = env::var("CREDENTIALS_DIRECTORY")
-        .unwrap_or("./".into())
+        .unwrap_or_else(|_| "./".into())
         .into();
     token_path.push("token");
     let token = fs::read_to_string(&token_path).map_err(|e| {

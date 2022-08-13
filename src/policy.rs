@@ -1,10 +1,13 @@
 use crate::MessageId;
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
-use log::{info, warn, debug};
+use log::{debug, info, warn};
 use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
-use teloxide::types::{
-    ChatId, ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User, UserId,
+use teloxide::{
+    dispatching::dialogue::GetChatId,
+    types::{
+        ChatId, ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User, UserId,
+    },
 };
 
 lazy_static! {
@@ -135,6 +138,10 @@ impl PolicyState {
     }
 
     pub fn get_message_to_delete(&mut self, update: &Update) -> Option<(ChatId, MessageId)> {
+        if let UpdateKind::Error(value) = &update.kind {
+            info!("Unsupported update [{:?}/{}]: {}", update.chat_id(), update.id, value);
+            return Some((update.chat_id()?, update.id));
+        }
         let chat = update.chat()?;
         if let ChatKind::Public(_) = chat.kind {
             match update.kind {
