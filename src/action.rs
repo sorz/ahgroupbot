@@ -2,12 +2,10 @@ use log::{debug, info, warn};
 use std::{sync::Arc, time::Duration};
 use teloxide::{
     requests::{Request, Requester},
-    types::{ChatId, UserId},
+    types::{ChatId, MessageId, UserId},
     ApiError, Bot, RequestError,
 };
 use tokio::{sync::Semaphore, time::sleep};
-
-use crate::MessageId;
 
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 

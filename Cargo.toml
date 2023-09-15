@@ -5,14 +5,12 @@ authors = ["sorz <me@sorz.org>"]
 edition = "2021"
 
 [dependencies]
-teloxide = "0.10"
+teloxide = "0.12"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 futures = "0.3"
-lazy_static = "1.4"
+lazy_static = "1"
 log = "0.4"
-env_logger = "0.9"
+env_logger = "0.10"
 sled = "0.34"
-byteorder = "1.4"
+byteorder = "1"
 
-[patch.crates-io]
-teloxide-core = { git = "https://github.com/sorz/teloxide-core/", branch = "custom-emoji" }

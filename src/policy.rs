@@ -1,4 +1,3 @@
-use crate::MessageId;
 use byteorder::{ReadBytesExt, WriteBytesExt, LE};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
@@ -6,7 +5,8 @@ use std::{collections::HashSet, convert::TryInto, fmt::Write, path::Path};
 use teloxide::{
     dispatching::dialogue::GetChatId,
     types::{
-        ChatId, ChatKind, Message, MessageEntityKind, MessageKind, Update, UpdateKind, User, UserId,
+        ChatId, ChatKind, Message, MessageEntityKind, MessageId, MessageKind, Update, UpdateKind,
+        User, UserId,
     },
 };
 
@@ -72,7 +72,7 @@ impl PolicyState {
         let noa = match message.text() {
             None => match message.sticker() {
                 // Treat allowed sticker as single 啊
-                Some(sticker) if ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file_unique_id) => 1,
+                Some(sticker) if ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file.unique_id) => 1,
                 // No neither-text-or-allowed-sticker messages
                 _ => return false,
             },
@@ -104,13 +104,13 @@ impl PolicyState {
         match (&message.kind, message.from()) {
             (MessageKind::Common(_), Some(sender)) => {
                 if let Some(sticker) = message.sticker() {
-                    if !ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file_unique_id) {
+                    if !ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file.unique_id) {
                         debug!(
                             "[{}] Unknown sticker [{}]({}): {}",
                             chat_id,
                             sender.id,
                             sender.full_name(),
-                            sticker.file_unique_id
+                            sticker.file.unique_id
                         );
                         Some(sender)
                     } else {
@@ -139,8 +139,13 @@ impl PolicyState {
 
     pub fn get_message_to_delete(&mut self, update: &Update) -> Option<(ChatId, MessageId)> {
         if let UpdateKind::Error(value) = &update.kind {
-            info!("Unsupported update [{:?}/{}]: {}", update.chat_id(), update.id, value);
-            return Some((update.chat_id()?, update.id));
+            info!(
+                "Unsupported update [{:?}/{}]: {}",
+                update.chat_id(),
+                update.id,
+                value
+            );
+            return Some((update.chat_id()?, MessageId(update.id)));
         }
         let chat = update.chat()?;
         if let ChatKind::Public(_) = chat.kind {
