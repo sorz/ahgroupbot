@@ -45,7 +45,7 @@ impl PolicyState {
             // Delete others
             _ => return false,
         }
-        let uid = match message.from() {
+        let uid = match &message.from {
             // No (other) bots
             Some(user) if user.is_bot => return false,
             Some(user) => user.id,
@@ -101,7 +101,7 @@ impl PolicyState {
         chat_id: ChatId,
         message: &'a Message,
     ) -> Option<&'a User> {
-        match (&message.kind, message.from()) {
+        match (&message.kind, &message.from) {
             (MessageKind::Common(_), Some(sender)) => {
                 if let Some(sticker) = message.sticker() {
                     if !ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file.unique_id) {
@@ -142,10 +142,12 @@ impl PolicyState {
             info!(
                 "Unsupported update [{:?}/{}]: {}",
                 update.chat_id(),
-                update.id,
+                update.id.0,
                 value
             );
-            return Some((update.chat_id()?, MessageId(update.id)));
+            // TODO: try to extract message id from `value`
+            // return Some((update.chat_id()?, MessageId(update.id)));
+            return None;
         }
         let chat = update.chat()?;
         if let ChatKind::Public(_) = chat.kind {

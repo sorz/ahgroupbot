@@ -75,14 +75,14 @@ async fn delete_message(
             Ok(_) => break Ok(()),
             Err(RequestError::RetryAfter(delay)) if retry < max_retry => {
                 warn!("RetryAfter received, retry deleting after {:?}", delay);
-                sleep(delay).await;
+                sleep(delay.duration()).await;
             }
             Err(RequestError::Network(err)) if retry < max_retry => {
                 warn!("Delayed deleting due to network error: {}", err);
                 sleep(RETRY_BASE_DELAY * 2u32.pow(retry)).await;
             }
             Err(RequestError::MigrateToChatId(new_chat_id)) if retry < max_retry => {
-                chat_id = ChatId(new_chat_id);
+                chat_id = new_chat_id;
             }
             Err(RequestError::Api(ApiError::MessageToDeleteNotFound))
             | Err(RequestError::Api(ApiError::MessageIdInvalid)) => {
