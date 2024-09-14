@@ -169,12 +169,16 @@ impl PolicyState {
             match message.kind {
                 MessageKind::NewChatMembers(ref members) => {
                     for member in &members.new_chat_members {
+                        let fullname = member.full_name();
                         info!(
                             "[{}] New user [{}]({}) join",
-                            message.chat.id,
-                            member.id,
-                            member.full_name(),
+                            message.chat.id, member.id, fullname,
                         );
+                        if fullname.contains('🔥') {
+                            // Fast path to ban
+                            info!("Ban user [{}] with fire emoji", fullname);
+                            return Some((message.chat.id, member.id));
+                        }
                         self.new_user_join(message.chat.id, member.id);
                     }
                 }
