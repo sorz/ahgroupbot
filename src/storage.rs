@@ -15,7 +15,7 @@ use tokio::{
 pub(crate) static SPAM_THREHOLD: u8 = 100;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-pub(crate) enum SpamState {
+pub enum SpamState {
     Authentic,
     MaybeSpam(u8),
     Spam,
@@ -58,9 +58,9 @@ impl SpamState {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-struct Data {
-    chats: HashMap<ChatId, (UserId, u32)>,
-    users: HashMap<UserId, SpamState>,
+pub struct Data {
+    pub chats: HashMap<ChatId, (UserId, u32)>,
+    pub users: HashMap<UserId, SpamState>,
 }
 
 #[derive(Debug)]
