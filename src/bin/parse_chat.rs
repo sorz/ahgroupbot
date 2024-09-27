@@ -3,7 +3,7 @@
 //! ./parse_chat <group-1.json> [group-2.json ...] > status.json
 use anyhow::{anyhow, bail};
 use regex::Regex;
-use sonic_rs::{Deserialize, Serialize};
+use sonic_rs::{Deserialize, FastStr, Serialize};
 use std::{
     env,
     fs::File,
@@ -20,7 +20,6 @@ static RE_USER_ID: LazyLock<Regex> =
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct ChatHistory {
-    name: String,
     id: ChatId,
     messages: Vec<Message>,
 }
@@ -30,21 +29,21 @@ struct ChatHistory {
 #[serde(tag = "type")]
 enum Message {
     Service,
-    Message { text: Text, from_id: String },
+    Message { text: Text, from_id: FastStr },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 enum Text {
-    Plain(String),
+    Plain(FastStr),
     Formatted(Vec<TextSegment>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 enum TextSegment {
-    Plain(String),
-    Formatted { text: String },
+    Plain(FastStr),
+    Formatted { text: FastStr },
 }
 
 fn count_noa(text: &str) -> anyhow::Result<u32> {
@@ -66,7 +65,7 @@ impl Text {
 }
 
 impl TextSegment {
-    fn text(&self) -> &String {
+    fn text(&self) -> &FastStr {
         match self {
             Self::Plain(text) => text,
             Self::Formatted { text } => text,
