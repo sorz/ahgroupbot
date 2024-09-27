@@ -14,7 +14,6 @@ const MAX_OUTSTANDING_REQUESTS: usize = 30;
 
 const MAX_RETRY: u32 = 5;
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(2);
-const COUNT_TO_BAN: u32 = 4;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,24 +22,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "./".into())
         .into();
     token_path.push("token");
-    let token = fs::read_to_string(&token_path).map_err(|e| {
+    let token = fs::read_to_string(&token_path).inspect_err(|e| {
         eprintln!(
-            "fail to read token from $CREDENTIALS_DIRECTORY/token `{}`",
-            token_path.display()
+            "fail to read token from $CREDENTIALS_DIRECTORY/token `{}`: {}",
+            token_path.display(),
+            e
         );
-        e
     })?;
 
     let mut db_path = env::var("STATE_DIRECTORY")
         .map(|p| p.into())
         .or_else(|_| env::current_dir())
         .expect("STATE_DIRECTORY not a valid path");
-    db_path.push("state.sled-db");
+    db_path.push("state.json");
 
     let bot = Bot::new(token.trim());
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
-    let mut policy =
-        PolicyState::new(&db_path, COUNT_TO_BAN).expect("Failed to open/create policy state file");
+    let mut policy = PolicyState::new(&db_path)
+        .await
+        .expect("Failed to open/create policy state file");
     let mut poll = polling_default(bot.clone()).await;
     let mut stream = Box::pin(poll.as_stream());
     let mut retry_count = 0u32;
@@ -60,10 +60,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(err) => return Err(err.into()),
         };
-        if let Some((chat_id, msg_id)) = policy.get_message_to_delete(&update) {
+        let action = policy.check_update(&update);
+        policy.save().await?;
+        if let Some((chat_id, msg_id)) = action.get_delete() {
             actions.spwan_delete_message(chat_id, msg_id).await;
         }
-        if let Some((chat_id, user_id)) = policy.get_user_to_ban(&update) {
+        if let Some((chat_id, user_id)) = action.get_ban() {
             actions.spawn_ban_user(chat_id, user_id).await;
         }
     }
