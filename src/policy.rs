@@ -1,7 +1,5 @@
-use lazy_static::lazy_static;
 use log::{debug, info};
-use regex::Regex;
-use std::{collections::HashSet, convert::TryInto, path::Path};
+use std::{collections::HashSet, convert::TryInto, path::Path, sync::LazyLock};
 use teloxide::{
     dispatching::dialogue::GetChatId,
     types::{
@@ -10,22 +8,17 @@ use teloxide::{
     },
 };
 
-use crate::storage::{self, SpamState, Storage};
+use crate::{
+    antispam::is_text_match_spam,
+    storage::{self, SpamState, Storage},
+};
 
-lazy_static! {
-    static ref ALLOWED_STICKER_FILE_IDS: HashSet<&'static str> = {
-        include_str!("stickers.txt")
-            .lines()
-            .filter(|l| !l.starts_with('#') && !l.is_empty())
-            .collect()
-    };
-    static ref SPAM_RE: Regex = Regex::new(concat!(
-        r"((\d|黑|搬)(U|u)|\d(W|w)|千|万|月|天|年|开户|最|(会|會)(员|員)|收入|接入|了解|",
-        r"做事|事情|兼职|专职|咨询|日结|小白|钱|搞|做|赚|支付|风险|主页|进群|介绍|TRX|散户|",
-        r"团队|专线|代理|合作|保底|日入|招人|💵|💯|🧧|📣|❤️)",
-    ))
-    .unwrap();
-}
+static ALLOWED_STICKER_FILE_IDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    include_str!("stickers.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect()
+});
 
 static SPAM_SCORE_LOW: u8 = storage::SPAM_THREHOLD / 6;
 static SPAM_SCORE_HIGH: u8 = storage::SPAM_THREHOLD / 2;
@@ -107,7 +100,7 @@ impl PolicyState {
         // Check for spammer
         if let Some(text) = message.text() {
             if !text.contains("啊") {
-                let state = SpamState::MaybeSpam(if SPAM_RE.is_match(text) {
+                let state = SpamState::MaybeSpam(if is_text_match_spam(text) {
                     info!("Spam (high score) [{}]: {}", uid, text);
                     SPAM_SCORE_HIGH
                 } else {

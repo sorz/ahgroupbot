@@ -1,4 +1,5 @@
 mod action;
+mod antispam;
 mod policy;
 mod storage;
 

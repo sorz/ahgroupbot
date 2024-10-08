@@ -8,7 +8,6 @@ edition = "2021"
 teloxide = "0.13"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 futures = "0.3"
-lazy_static = "1"
 log = "0.4"
 env_logger = "0.11"
 byteorder = "1"
