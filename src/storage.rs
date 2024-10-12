@@ -1,6 +1,5 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
-    ops::{Add, AddAssign},
     path::Path,
 };
 
@@ -12,50 +11,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom},
 };
 
-pub(crate) static SPAM_THREHOLD: u8 = 100;
-
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum SpamState {
-    Authentic,
-    MaybeSpam(u8),
-    Spam,
-}
-
-impl Default for SpamState {
-    fn default() -> Self {
-        Self::MaybeSpam(0)
-    }
-}
-
-impl Add for SpamState {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Self::Authentic, _) | (_, Self::Authentic) => Self::Authentic,
-            (Self::Spam, _) | (_, Self::Spam) => Self::Spam,
-            (Self::MaybeSpam(a), Self::MaybeSpam(b)) => {
-                if a + b < SPAM_THREHOLD {
-                    Self::MaybeSpam(a + b)
-                } else {
-                    Self::Spam
-                }
-            }
-        }
-    }
-}
-
-impl AddAssign for SpamState {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
-impl SpamState {
-    pub(crate) fn is_spam(&self) -> bool {
-        matches!(self, Self::Spam)
-    }
-}
+use crate::antispam::SpamState;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Data {
@@ -142,35 +98,9 @@ impl Storage {
     }
 }
 
-#[test]
-fn test_spam_state_ops() {
-    // Authentic take highest priority
-    assert_eq!(
-        SpamState::Authentic,
-        SpamState::Authentic + SpamState::Authentic
-    );
-    assert_eq!(SpamState::Authentic, SpamState::Authentic + SpamState::Spam);
-    assert_eq!(SpamState::Authentic, SpamState::Spam + SpamState::Authentic);
-    assert_eq!(
-        SpamState::Authentic,
-        SpamState::MaybeSpam(0) + SpamState::Authentic
-    );
-
-    // MaybeSpam ops
-    assert_eq!(
-        SpamState::MaybeSpam(3),
-        SpamState::MaybeSpam(1) + SpamState::MaybeSpam(2)
-    );
-    assert_eq!(
-        SpamState::Spam,
-        SpamState::MaybeSpam(1) + SpamState::MaybeSpam(SPAM_THREHOLD - 1)
-    );
-    assert_eq!(SpamState::Spam, SpamState::MaybeSpam(1) + SpamState::Spam);
-    assert_eq!(SpamState::Spam, SpamState::Spam + SpamState::MaybeSpam(1));
-}
-
 #[tokio::test]
 async fn test_storage() {
+    use crate::antispam::SPAM_THREHOLD;
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("test.json");
     let mut storage = Storage::open(&path).await.unwrap();

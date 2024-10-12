@@ -9,8 +9,8 @@ use teloxide::{
 };
 
 use crate::{
-    antispam::is_text_match_spam,
-    storage::{self, SpamState, Storage},
+    antispam::{check_message_text, SpamState},
+    storage::Storage,
 };
 
 static ALLOWED_STICKER_FILE_IDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
@@ -19,9 +19,6 @@ static ALLOWED_STICKER_FILE_IDS: LazyLock<HashSet<&'static str>> = LazyLock::new
         .filter(|l| !l.starts_with('#') && !l.is_empty())
         .collect()
 });
-
-static SPAM_SCORE_LOW: u8 = storage::SPAM_THREHOLD / 6;
-static SPAM_SCORE_HIGH: u8 = storage::SPAM_THREHOLD / 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -99,18 +96,10 @@ impl PolicyState {
 
         // Check for spammer
         if let Some(text) = message.text() {
-            if !text.contains("啊") {
-                let state = SpamState::MaybeSpam(if is_text_match_spam(text) {
-                    info!("Spam (high score) [{}]: {}", uid, text);
-                    SPAM_SCORE_HIGH
-                } else {
-                    info!("Spam (low score) [{}]: {}", uid, text);
-                    SPAM_SCORE_LOW
-                });
-                let state = self.db.update_user(&uid, state);
-                if state.is_spam() {
-                    return Action::DeleteAndBan(chat_id, message.id, uid);
-                }
+            let state = check_message_text(text);
+            let state = self.db.update_user(&uid, state);
+            if state.is_spam() {
+                return Action::DeleteAndBan(chat_id, message.id, uid);
             }
         }
 
@@ -150,7 +139,7 @@ impl PolicyState {
             return action_delete;
         }
         // Now they're a trusted user
-        self.db.update_user(&uid, storage::SpamState::Authentic);
+        self.db.update_user(&uid, SpamState::Authentic);
         Action::Accept
     }
 
