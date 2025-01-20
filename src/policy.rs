@@ -9,7 +9,7 @@ use teloxide::{
 };
 
 use crate::{
-    antispam::{check_message_text, SpamState},
+    antispam::{check_full_name_likely_spammer, check_message_text, SpamState},
     storage::Storage,
 };
 
@@ -75,7 +75,7 @@ impl PolicyState {
                         "[{}] New user [{}]({}) join",
                         message.chat.id, member.id, fullname,
                     );
-                    if fullname.contains('🔥') {
+                    if check_full_name_likely_spammer(&fullname) {
                         // Fast path to ban
                         info!("Ban user [{}] with fire emoji", fullname);
                         return Action::DeleteAndBan(chat_id, message.id, member.id);

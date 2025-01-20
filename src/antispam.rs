@@ -8,7 +8,7 @@ use sonic_rs::{Deserialize, Serialize};
 
 static RE_SPAM_HIGH_RISK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
-        r"(\d|黑|搬)(U|u)|开户|(会|會)(员|員)|收入|接入|",
+        r"(\d|黑|搬|送)(U|u)|开户|(会|會)(员|員)|收入|接入|",
         r"兼职|专职|咨询|日结|小白|钱|赚|支付|风险|主页|介绍|TRX|散户|",
         r"团队|专线|代理|合作|保底|日入|招人|商家|💵|💯|🧧|📣",
     ))
@@ -17,13 +17,16 @@ static RE_SPAM_HIGH_RISK: LazyLock<Regex> = LazyLock::new(|| {
 
 static RE_SPAM_MEDIUM_RISK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
-        r"\d(W|w|K|k)|千|万|月|天|年|最|搞|做|操作|进群|做事|事情|了解|❤️",
+        r"\d(W|w|K|k)|千|万|月|天|年|最|搞|做|操作|进群|做事|事情|了解|❤️|✈️",
     ))
     .unwrap()
 });
 
 static RE_SPAM_NO_RISK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(concat!(r"阿|啊|[aA]{3,}|[aA][hH]+",)).unwrap());
+
+static RE_SPAM_FULL_NAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(concat!(r"🔥|看竹页",)).unwrap());
 
 pub(crate) static SPAM_THREHOLD: u8 = 100;
 static TEXT_SPAM_SCORE_MEDIUM_RISK: u8 = SPAM_THREHOLD / 2;
@@ -84,6 +87,10 @@ pub fn check_message_text(text: &str) -> SpamState {
     }
 }
 
+pub fn check_full_name_likely_spammer(name: &str) -> bool {
+    RE_SPAM_FULL_NAME.is_match(name)
+}
+
 #[test]
 fn test_spam_state_ops() {
     // Authentic take highest priority
@@ -129,4 +136,11 @@ fn test_spam_text() {
     assert_eq!(medium, check_message_text("…搞事情…"));
     assert_eq!(high, check_message_text("…搬U…"));
     assert_eq!(high, check_message_text("…3天开户…"));
+}
+
+#[test]
+fn test_spam_name() {
+    assert!(check_full_name_likely_spammer("立即来🔥赚麻了"));
+    assert!(check_full_name_likely_spammer("来看竹页吧"));
+    assert!(!check_full_name_likely_spammer("_(:з」∠)_"));
 }
