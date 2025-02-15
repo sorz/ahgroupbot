@@ -1,5 +1,5 @@
 use log::{debug, info};
-use std::{collections::HashSet, convert::TryInto, path::Path, sync::LazyLock};
+use std::{borrow::Cow, collections::HashSet, convert::TryInto, path::Path, sync::LazyLock};
 use teloxide::{
     dispatching::dialogue::GetChatId,
     types::{
@@ -95,7 +95,13 @@ impl PolicyState {
         };
 
         // Check for spammer
-        if let Some(text) = message.text() {
+        let text_to_check = message.text().map(Cow::Borrowed).or_else(|| {
+            message
+                .sticker()
+                .and_then(|sticker| sticker.set_name.clone())
+                .map(Cow::Owned)
+        });
+        if let Some(text) = text_to_check {
             let state = check_message_text(text);
             let state = self.db.update_user(&uid, state);
             if state.is_spam() {

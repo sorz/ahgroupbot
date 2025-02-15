@@ -8,9 +8,9 @@ use sonic_rs::{Deserialize, Serialize};
 
 static RE_SPAM_HIGH_RISK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
-        r"(\d|黑|搬|送)(U|u)|开户|(会|會)(员|員)|收入|接入|",
+        r"(\d|黑|搬|送)(U|u)|开户|(会|會)(员|員)|收入|接入|免费|完整版|",
         r"兼职|专职|咨询|日结|小白|钱|赚|支付|风险|主页|介绍|TRX|散户|",
-        r"团队|专线|代理|合作|保底|日入|招人|商家|💵|💯|🧧|📣",
+        r"团队|专线|代理|合作|保底|日入|招人|商家|💵|💯|🧧|📣|➡️|⬅️",
     ))
     .unwrap()
 });
@@ -75,12 +75,12 @@ impl SpamState {
     }
 }
 
-pub fn check_message_text(text: &str) -> SpamState {
-    if RE_SPAM_NO_RISK.is_match(text) {
+pub fn check_message_text<T: AsRef<str>>(text: T) -> SpamState {
+    if RE_SPAM_NO_RISK.is_match(text.as_ref()) {
         SpamState::MaybeSpam(0)
-    } else if RE_SPAM_HIGH_RISK.is_match(text) {
+    } else if RE_SPAM_HIGH_RISK.is_match(text.as_ref()) {
         SpamState::Spam
-    } else if RE_SPAM_MEDIUM_RISK.is_match(text) {
+    } else if RE_SPAM_MEDIUM_RISK.is_match(text.as_ref()) {
         SpamState::MaybeSpam(TEXT_SPAM_SCORE_MEDIUM_RISK)
     } else {
         SpamState::MaybeSpam(TEXT_SPAM_SCORE_UNKNOWN_RISK)
