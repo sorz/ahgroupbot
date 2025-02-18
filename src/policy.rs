@@ -1,11 +1,13 @@
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::{borrow::Cow, collections::HashSet, convert::TryInto, path::Path, sync::LazyLock};
 use teloxide::{
     dispatching::dialogue::GetChatId,
+    prelude::Requester,
     types::{
-        ChatId, ChatKind, Message, MessageEntityKind, MessageId, MessageKind, Update, UpdateKind,
-        UserId,
+        ChatId, ChatKind, Message, MessageEntityKind, MessageId, MessageKind, Sticker, Update,
+        UpdateKind, UserId,
     },
+    Bot,
 };
 
 use crate::{
@@ -45,12 +47,14 @@ impl Action {
 
 #[derive(Debug)]
 pub struct PolicyState {
+    bot: Bot,
     db: Storage,
 }
 
 impl PolicyState {
-    pub async fn new<P: AsRef<Path>>(db_path: P) -> anyhow::Result<Self> {
+    pub async fn new<P: AsRef<Path>>(bot: Bot, db_path: P) -> anyhow::Result<Self> {
         Ok(Self {
+            bot,
             db: Storage::open(db_path).await?,
         })
     }
@@ -59,7 +63,17 @@ impl PolicyState {
         self.db.save().await
     }
 
-    fn check_message(&mut self, chat_id: ChatId, message: &Message) -> Action {
+    async fn get_sticker_set_title(&self, sticker: &Sticker) -> Option<String> {
+        match self.bot.get_sticker_set(sticker.set_name.clone()?).await {
+            Ok(set) => Some(set.title),
+            Err(err) => {
+                warn!("failed to get sticker set: {}", err);
+                None
+            }
+        }
+    }
+
+    async fn check_message(&mut self, chat_id: ChatId, message: &Message) -> Action {
         let action_delete = Action::Delete(chat_id, message.id);
         match message.kind {
             // Allow some of system messages
@@ -77,7 +91,7 @@ impl PolicyState {
                     );
                     if check_full_name_likely_spammer(&fullname) {
                         // Fast path to ban
-                        info!("Ban user [{}] with fire emoji", fullname);
+                        info!("Ban user [{}] for their name", fullname);
                         return Action::DeleteAndBan(chat_id, message.id, member.id);
                     }
                 }
@@ -95,12 +109,14 @@ impl PolicyState {
         };
 
         // Check for spammer
-        let text_to_check = message.text().map(Cow::Borrowed).or_else(|| {
-            message
-                .sticker()
-                .and_then(|sticker| sticker.set_name.clone())
-                .map(Cow::Owned)
-        });
+        let text_to_check = if let Some(msg) = message.text() {
+            Some(Cow::Borrowed(msg))
+        } else if let Some(sticker) = message.sticker() {
+            self.get_sticker_set_title(sticker).await.map(Cow::Owned)
+        } else {
+            None
+        };
+
         if let Some(text) = text_to_check {
             let state = check_message_text(text);
             let state = self.db.update_user(&uid, state);
@@ -149,7 +165,7 @@ impl PolicyState {
         Action::Accept
     }
 
-    pub fn check_update(&mut self, update: &Update) -> Action {
+    pub async fn check_update(&mut self, update: &Update) -> Action {
         if let UpdateKind::Error(value) = &update.kind {
             info!(
                 "Unsupported update [{:?}/{}]: {}",
@@ -167,7 +183,7 @@ impl PolicyState {
         };
         if let ChatKind::Public(_) = chat.kind {
             match update.kind {
-                UpdateKind::Message(ref msg) => self.check_message(chat.id, msg),
+                UpdateKind::Message(ref msg) => self.check_message(chat.id, msg).await,
                 UpdateKind::EditedMessage(ref msg) => Action::Delete(chat.id, msg.id),
                 _ => Action::Accept,
             }

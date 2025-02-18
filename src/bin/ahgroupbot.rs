@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bot = Bot::new(token.trim());
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
-    let mut policy = PolicyState::new(&db_path)
+    let mut policy = PolicyState::new(bot.clone(), &db_path)
         .await
         .expect("Failed to open/create policy state file");
     let mut poll = polling_default(bot.clone()).await;
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Err(err) => return Err(err.into()),
         };
-        let action = policy.check_update(&update);
+        let action = policy.check_update(&update).await;
         policy.save().await?;
         if let Some((chat_id, msg_id)) = action.get_delete() {
             actions.spwan_delete_message(chat_id, msg_id).await;
