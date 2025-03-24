@@ -1,17 +1,17 @@
 use log::{debug, info, warn};
 use std::{borrow::Cow, collections::HashSet, convert::TryInto, path::Path, sync::LazyLock};
 use teloxide::{
+    Bot,
     dispatching::dialogue::GetChatId,
     prelude::Requester,
     types::{
         ChatId, ChatKind, Message, MessageEntityKind, MessageId, MessageKind, Sticker, Update,
         UpdateKind, UserId,
     },
-    Bot,
 };
 
 use crate::{
-    antispam::{check_full_name_likely_spammer, check_message_text, SpamState},
+    antispam::{SpamState, check_full_name_likely_spammer, check_message_text},
     storage::Storage,
 };
 

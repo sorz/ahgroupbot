@@ -3,8 +3,8 @@ use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{env, fs, path::PathBuf, time::Duration};
 use teloxide::{
-    update_listeners::{polling_default, AsUpdateStream},
     Bot, RequestError,
+    update_listeners::{AsUpdateStream, polling_default},
 };
 use tokio::time::sleep;
 

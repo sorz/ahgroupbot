@@ -1,9 +1,9 @@
 use log::{debug, info, warn};
 use std::{sync::Arc, time::Duration};
 use teloxide::{
+    ApiError, Bot, RequestError,
     requests::{Request, Requester},
     types::{ChatId, MessageId, UserId},
-    ApiError, Bot, RequestError,
 };
 use tokio::{sync::Semaphore, time::sleep};
 
