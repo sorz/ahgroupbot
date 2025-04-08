@@ -5,7 +5,7 @@ authors = ["sorz <me@sorz.org>"]
 edition = "2024"
 
 [dependencies]
-teloxide = "0.13"
+teloxide = "0.15"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 futures = "0.3"
 log = "0.4"
