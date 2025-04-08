@@ -18,17 +18,14 @@ static RE_SPAM_HIGH_RISK: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 static RE_SPAM_MEDIUM_RISK: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(concat!(
-        r"\d(W|w|K|k)|千|万|月|天|年|最|搞|做|操作|进群|做事|事情|了解|❤️|✈️",
-    ))
-    .unwrap()
+    Regex::new(r"\d(W|w|K|k)|千|万|月|天|年|最|搞|做|操作|进群|做事|事情|了解|❤️|✈️").unwrap()
 });
 
 static RE_SPAM_NO_RISK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(concat!(r"阿|啊|[aA]{3,}|[aA][hH]+",)).unwrap());
+    LazyLock::new(|| Regex::new(r"阿|啊|[aA]{3,}|[aA][hH]+").unwrap());
 
 static RE_SPAM_FULL_NAME: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(concat!(r"🔥|看竹页",)).unwrap());
+    LazyLock::new(|| Regex::new(r"🔥|看主页|看竹页|会员|会員|赚钱|达利|来了|来咯").unwrap());
 
 pub(crate) static SPAM_THREHOLD: u8 = 100;
 static TEXT_SPAM_SCORE_MEDIUM_RISK: u8 = SPAM_THREHOLD / 2;
@@ -90,7 +87,11 @@ pub fn check_message_text<T: AsRef<str>>(text: T) -> SpamState {
 }
 
 pub fn check_full_name_likely_spammer(name: &str) -> bool {
-    RE_SPAM_FULL_NAME.is_match(name)
+    if name.contains('|') || name.contains('｜') {
+        false
+    } else {
+        RE_SPAM_FULL_NAME.is_match(name)
+    }
 }
 
 #[test]
@@ -145,4 +146,5 @@ fn test_spam_name() {
     assert!(check_full_name_likely_spammer("立即来🔥赚麻了"));
     assert!(check_full_name_likely_spammer("来看竹页吧"));
     assert!(!check_full_name_likely_spammer("_(:з」∠)_"));
+    assert!(!check_full_name_likely_spammer("啊啊|赚钱"));
 }
