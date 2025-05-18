@@ -31,8 +31,9 @@ static RE_SPAM_MEDIUM_RISK: LazyLock<Regex> = LazyLock::new(|| {
 static RE_SPAM_NO_RISK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"阿|啊|[aA]{3,}|[aA][hH]+").unwrap());
 
-static RE_SPAM_FULL_NAME: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"🔥|看主页|看竹页|会员|会員|赚钱|达利|来了|来咯").unwrap());
+static RE_SPAM_FULL_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"🔥|看主页|看竹页|会员|会員|赚钱|达利|来了|来咯|[\u206a-\u206f]").unwrap()
+});
 
 pub(crate) static SPAM_THREHOLD: u8 = 100;
 static TEXT_SPAM_SCORE_MEDIUM_RISK: u8 = SPAM_THREHOLD / 2;
@@ -152,6 +153,7 @@ fn test_spam_text() {
 fn test_spam_name() {
     assert!(check_full_name_likely_spammer("立即来🔥赚麻了"));
     assert!(check_full_name_likely_spammer("来看竹页吧"));
+    assert!(check_full_name_likely_spammer("legacy\u{206e}codepint"));
     assert!(!check_full_name_likely_spammer("_(:з」∠)_"));
     assert!(!check_full_name_likely_spammer("啊啊|赚钱"));
 }
