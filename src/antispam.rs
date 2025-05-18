@@ -1,4 +1,5 @@
 use std::{
+    iter::Sum,
     ops::{Add, AddAssign},
     sync::LazyLock,
 };
@@ -73,6 +74,12 @@ impl Add for SpamState {
 impl AddAssign for SpamState {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs;
+    }
+}
+
+impl Sum for SpamState {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::default(), |a, b| a + b)
     }
 }
 

@@ -108,25 +108,30 @@ impl PolicyState {
             None => return Action::Accept,
         };
 
-        // Check for spammer
-        let text_to_check = if let Some(msg) = message.text() {
-            Some(Cow::Borrowed(msg))
-        } else if let Some(sticker) = message.sticker() {
-            self.get_sticker_set_title(sticker).await.map(Cow::Owned)
-        } else {
-            None
-        };
-
-        if let Some(text) = text_to_check {
-            let state = check_message_text(text);
-            let state = self.db.update_user(&uid, state);
-            if state.is_spam() {
-                return Action::DeleteAndBan(chat_id, message.id, uid);
-            }
+        // Check for spammer: message text, quoted text, and sticker name
+        let text_to_check = [
+            message.text().map(Cow::Borrowed),
+            message
+                .quote()
+                .map(|quote| Cow::Borrowed(quote.text.as_str())),
+            if let Some(sticker) = message.sticker() {
+                self.get_sticker_set_title(sticker).await.map(Cow::Owned)
+            } else {
+                None
+            },
+        ];
+        let spam_state = text_to_check
+            .into_iter()
+            .flatten()
+            .map(check_message_text)
+            .sum();
+        let spam_state = self.db.update_user(&uid, spam_state);
+        if spam_state.is_spam() {
+            return Action::DeleteAndBan(chat_id, message.id, uid);
         }
 
-        if message.reply_to_message().is_some() {
-            return action_delete; // No reply
+        if message.reply_to_message().is_some() || message.quote().is_some() {
+            return action_delete; // No reply or quote
         }
         if message.entities().unwrap_or(&[]).iter().any(|entity| {
             !matches!(
