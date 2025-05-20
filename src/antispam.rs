@@ -184,11 +184,23 @@ fn test_spam_state_ops() {
 
 #[test]
 fn test_spam_timestamp_ops() {
-    let old = SpamState::MaybeSpam { score: 0, create_ts_secs: 100, update_ts_secs: 100 };
-    let new = SpamState::MaybeSpam { score: 1, create_ts_secs: 200, update_ts_secs: 200 };
-    let updated = SpamState::MaybeSpam { score: 1, create_ts_secs: 100, update_ts_secs: 200 };
+    let old = SpamState::MaybeSpam {
+        score: 0,
+        create_ts_secs: 100,
+        update_ts_secs: 100,
+    };
+    let new = SpamState::MaybeSpam {
+        score: 1,
+        create_ts_secs: 200,
+        update_ts_secs: 200,
+    };
+    let updated = SpamState::MaybeSpam {
+        score: 1,
+        create_ts_secs: 100,
+        update_ts_secs: 200,
+    };
     assert_eq!(old + new, updated);
-    assert_eq!(new + old , updated);
+    assert_eq!(new + old, updated);
 }
 
 #[test]

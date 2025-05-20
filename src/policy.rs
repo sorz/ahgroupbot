@@ -125,7 +125,7 @@ impl PolicyState {
             .flatten()
             .map(check_message_text)
             .sum();
-        let spam_state = self.db.update_user(&uid, spam_state);
+        let spam_state = self.db.update_user(&uid, spam_state).await;
         if spam_state.is_spam() {
             return Action::DeleteAndBan(chat_id, message.id, uid);
         }
@@ -161,12 +161,12 @@ impl PolicyState {
             Some(text) => (text.len() / 3).try_into().expect("Toooooo mmmany ah"),
         };
 
-        if let Err(err) = self.db.update_chat(&chat_id, (uid, noa)) {
+        if let Err(err) = self.db.update_chat(&chat_id, (uid, noa)).await {
             debug!("Reject message from [{}]: {}", uid, err);
             return action_delete;
         }
         // Now they're a trusted user
-        self.db.update_user(&uid, SpamState::Authentic);
+        self.db.update_user(&uid, SpamState::Authentic).await;
         Action::Accept
     }
 
