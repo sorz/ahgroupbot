@@ -123,6 +123,14 @@ impl SpamState {
         matches!(self, Self::Spam)
     }
 
+    pub(crate) fn is_authentic(&self) -> bool {
+        matches!(self, Self::Authentic)
+    }
+
+    pub(crate) fn is_maybe_spam(&self) -> bool {
+        matches!(self, Self::MaybeSpam { .. })
+    }
+
     pub(crate) fn with_score(score: u8) -> Self {
         if score >= SPAM_THREHOLD {
             Self::Spam

@@ -1,5 +1,8 @@
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::{
+        HashMap,
+        hash_map::{self, Entry},
+    },
     path::Path,
     sync::Arc,
 };
@@ -125,6 +128,24 @@ impl Storage {
                 Ok(())
             }
         }
+    }
+
+    pub(crate) async fn with_user_states<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(hash_map::Iter<UserId, SpamState>) -> R,
+    {
+        let inner = self.inner.lock().await;
+        let iter = inner.data.users.iter();
+        f(iter)
+    }
+
+    pub(crate) async fn with_chats<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(hash_map::Iter<ChatId, (UserId, u32)>) -> R,
+    {
+        let inner = self.inner.lock().await;
+        let iter = inner.data.chats.iter();
+        f(iter)
     }
 }
 

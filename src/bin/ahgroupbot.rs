@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Failed to open/create policy state file");
 
-    let background = BackgroundSpamCheck::new(bot.clone(), storage);
+    let background = BackgroundSpamCheck::new(bot.clone(), storage, actions.clone());
     tokio::spawn(async move {
         background.launch().await;
     });
