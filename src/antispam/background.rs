@@ -94,6 +94,7 @@ impl BackgroundSpamCheck {
                 continue;
             }
             // Ban on all chats
+            self.storage.update_user(&uid, SpamState::Spam).await;
             for chat in chats.iter() {
                 if let Ok(member) = self.bot.get_chat_member(*chat, uid).await {
                     if member.is_present() {

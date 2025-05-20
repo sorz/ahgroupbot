@@ -75,11 +75,7 @@ impl Storage {
         self.inner.lock().await.save().await
     }
 
-    pub(crate) async fn update_user(
-        &mut self,
-        user_id: &UserId,
-        new_state: SpamState,
-    ) -> SpamState {
+    pub(crate) async fn update_user(&self, user_id: &UserId, new_state: SpamState) -> SpamState {
         *self
             .inner
             .lock()
@@ -107,7 +103,7 @@ impl Storage {
     }
 
     pub(crate) async fn update_chat(
-        &mut self,
+        &self,
         chat_id: &ChatId,
         (user_id, noa): (UserId, u32),
     ) -> anyhow::Result<()> {
