@@ -1,3 +1,5 @@
+pub(crate) mod background;
+
 use std::{
     cmp,
     iter::Sum,

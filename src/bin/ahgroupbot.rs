@@ -1,4 +1,4 @@
-use ahgroupbot::{Actions, PolicyState};
+use ahgroupbot::{Actions, BackgroundSpamCheck, PolicyState, Storage};
 use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{env, fs, path::PathBuf, time::Duration};
@@ -37,10 +37,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db_path.push("state.json");
 
     let bot = Bot::new(token.trim());
+    let storage = Storage::open(&db_path).await?;
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
-    let mut policy = PolicyState::new(bot.clone(), &db_path)
+    let mut policy = PolicyState::new(bot.clone(), storage.clone())
         .await
         .expect("Failed to open/create policy state file");
+
+    let background = BackgroundSpamCheck::new(bot.clone(), storage);
+    tokio::spawn(async move {
+        background.launch().await;
+    });
+
     let mut poll = polling_default(bot.clone()).await;
     let mut stream = Box::pin(poll.as_stream());
     let mut retry_count = 0u32;

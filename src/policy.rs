@@ -1,5 +1,5 @@
 use log::{debug, info, warn};
-use std::{borrow::Cow, collections::HashSet, convert::TryInto, path::Path, sync::LazyLock};
+use std::{borrow::Cow, collections::HashSet, convert::TryInto, sync::LazyLock};
 use teloxide::{
     Bot,
     dispatching::dialogue::GetChatId,
@@ -45,18 +45,15 @@ impl Action {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PolicyState {
     bot: Bot,
     db: Storage,
 }
 
 impl PolicyState {
-    pub async fn new<P: AsRef<Path>>(bot: Bot, db_path: P) -> anyhow::Result<Self> {
-        Ok(Self {
-            bot,
-            db: Storage::open(db_path).await?,
-        })
+    pub async fn new(bot: Bot, db: Storage) -> anyhow::Result<Self> {
+        Ok(Self { bot, db })
     }
 
     pub async fn save(&mut self) -> anyhow::Result<()> {

@@ -22,7 +22,7 @@ pub struct Data {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Storage {
+pub struct Storage {
     inner: Arc<Mutex<StorageImpl>>,
 }
 
@@ -45,7 +45,7 @@ impl StorageImpl {
 }
 
 impl Storage {
-    pub(crate) async fn open<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
+    pub async fn open<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
         let mut file = File::options()
             .read(true)
             .write(true)
