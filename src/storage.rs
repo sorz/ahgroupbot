@@ -125,30 +125,30 @@ async fn test_storage() {
         SpamState::Authentic
     );
     assert_eq!(
-        storage.update_user(&UserId(2), SpamState::MaybeSpam(10)),
-        SpamState::MaybeSpam(10)
+        storage.update_user(&UserId(2), SpamState::with_score(10)),
+        SpamState::with_score(10)
     );
     assert_eq!(
-        storage.update_user(&UserId(2), SpamState::MaybeSpam(20)),
-        SpamState::MaybeSpam(30)
+        storage.update_user(&UserId(2), SpamState::with_score(20)),
+        SpamState::with_score(30)
     );
     assert_eq!(
-        storage.update_user(&UserId(2), SpamState::MaybeSpam(SPAM_THREHOLD - 10)),
+        storage.update_user(&UserId(2), SpamState::with_score(SPAM_THREHOLD - 10)),
         SpamState::Spam
     );
     assert_eq!(
-        storage.update_user(&UserId(2), SpamState::MaybeSpam(1)),
+        storage.update_user(&UserId(2), SpamState::with_score(1)),
         SpamState::Spam
     );
-    storage.update_user(&UserId(3), SpamState::MaybeSpam(20));
+    storage.update_user(&UserId(3), SpamState::with_score(20));
     storage.save().await.unwrap();
     storage.save().await.unwrap(); // redundancy
 
     let storage = Storage::open(&path).await.unwrap();
     assert_eq!(storage.get_user(&UserId(1)), SpamState::Authentic);
     assert_eq!(storage.get_user(&UserId(2)), SpamState::Spam);
-    assert_eq!(storage.get_user(&UserId(3)), SpamState::MaybeSpam(20));
-    assert_eq!(storage.get_user(&UserId(4)), SpamState::MaybeSpam(0));
+    assert_eq!(storage.get_user(&UserId(3)), SpamState::with_score(20));
+    assert_eq!(storage.get_user(&UserId(4)), SpamState::with_score(0));
 
     assert!(!storage.get_user(&UserId(1)).is_spam());
     assert!(storage.get_user(&UserId(2)).is_spam());

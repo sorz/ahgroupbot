@@ -1,7 +1,9 @@
 use std::{
+    cmp,
     iter::Sum,
     ops::{Add, AddAssign},
     sync::LazyLock,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use regex::Regex;
@@ -43,13 +45,29 @@ static TEXT_SPAM_SCORE_UNKNOWN_RISK: u8 = SPAM_THREHOLD / 6;
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SpamState {
     Authentic,
-    MaybeSpam(u8),
+    MaybeSpam {
+        score: u8,
+        create_ts_secs: u64,
+        update_ts_secs: u64,
+    },
     Spam,
+}
+
+fn now_ts_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time before epoch")
+        .as_secs()
 }
 
 impl Default for SpamState {
     fn default() -> Self {
-        Self::MaybeSpam(0)
+        let now = now_ts_secs();
+        Self::MaybeSpam {
+            score: 0,
+            create_ts_secs: now,
+            update_ts_secs: now,
+        }
     }
 }
 
@@ -60,9 +78,24 @@ impl Add for SpamState {
         match (self, rhs) {
             (Self::Authentic, _) | (_, Self::Authentic) => Self::Authentic,
             (Self::Spam, _) | (_, Self::Spam) => Self::Spam,
-            (Self::MaybeSpam(a), Self::MaybeSpam(b)) => {
-                if a + b < SPAM_THREHOLD {
-                    Self::MaybeSpam(a + b)
+            (
+                Self::MaybeSpam {
+                    score: score1,
+                    create_ts_secs: cs1,
+                    update_ts_secs: us1,
+                },
+                Self::MaybeSpam {
+                    score: score2,
+                    create_ts_secs: cs2,
+                    update_ts_secs: us2,
+                },
+            ) => {
+                if score1 + score2 < SPAM_THREHOLD {
+                    Self::MaybeSpam {
+                        score: score1 + score2,
+                        create_ts_secs: cmp::min(cs1, cs2),
+                        update_ts_secs: cmp::max(us1, us2),
+                    }
                 } else {
                     Self::Spam
                 }
@@ -87,17 +120,30 @@ impl SpamState {
     pub(crate) fn is_spam(&self) -> bool {
         matches!(self, Self::Spam)
     }
+
+    pub(crate) fn with_score(score: u8) -> Self {
+        if score >= SPAM_THREHOLD {
+            Self::Spam
+        } else {
+            let now = now_ts_secs();
+            Self::MaybeSpam {
+                score,
+                create_ts_secs: now,
+                update_ts_secs: now,
+            }
+        }
+    }
 }
 
 pub fn check_message_text<T: AsRef<str>>(text: T) -> SpamState {
     if RE_SPAM_NO_RISK.is_match(text.as_ref()) {
-        SpamState::MaybeSpam(0)
+        SpamState::with_score(0)
     } else if RE_SPAM_HIGH_RISK.is_match(text.as_ref()) {
         SpamState::Spam
     } else if RE_SPAM_MEDIUM_RISK.is_match(text.as_ref()) {
-        SpamState::MaybeSpam(TEXT_SPAM_SCORE_MEDIUM_RISK)
+        SpamState::with_score(TEXT_SPAM_SCORE_MEDIUM_RISK)
     } else {
-        SpamState::MaybeSpam(TEXT_SPAM_SCORE_UNKNOWN_RISK)
+        SpamState::with_score(TEXT_SPAM_SCORE_UNKNOWN_RISK)
     }
 }
 
@@ -120,28 +166,37 @@ fn test_spam_state_ops() {
     assert_eq!(SpamState::Authentic, SpamState::Spam + SpamState::Authentic);
     assert_eq!(
         SpamState::Authentic,
-        SpamState::MaybeSpam(0) + SpamState::Authentic
+        SpamState::with_score(0) + SpamState::Authentic
     );
 
     // MaybeSpam ops
     assert_eq!(
-        SpamState::MaybeSpam(3),
-        SpamState::MaybeSpam(1) + SpamState::MaybeSpam(2)
+        SpamState::with_score(3),
+        SpamState::with_score(1) + SpamState::with_score(2)
     );
     assert_eq!(
         SpamState::Spam,
-        SpamState::MaybeSpam(1) + SpamState::MaybeSpam(SPAM_THREHOLD - 1)
+        SpamState::with_score(1) + SpamState::with_score(SPAM_THREHOLD - 1)
     );
-    assert_eq!(SpamState::Spam, SpamState::MaybeSpam(1) + SpamState::Spam);
-    assert_eq!(SpamState::Spam, SpamState::Spam + SpamState::MaybeSpam(1));
+    assert_eq!(SpamState::Spam, SpamState::with_score(1) + SpamState::Spam);
+    assert_eq!(SpamState::Spam, SpamState::Spam + SpamState::with_score(1));
+}
+
+#[test]
+fn test_spam_timestamp_ops() {
+    let old = SpamState::MaybeSpam { score: 0, create_ts_secs: 100, update_ts_secs: 100 };
+    let new = SpamState::MaybeSpam { score: 1, create_ts_secs: 200, update_ts_secs: 200 };
+    let updated = SpamState::MaybeSpam { score: 1, create_ts_secs: 100, update_ts_secs: 200 };
+    assert_eq!(old + new, updated);
+    assert_eq!(new + old , updated);
 }
 
 #[test]
 fn test_spam_text() {
     let high = SpamState::Spam;
-    let medium = SpamState::MaybeSpam(TEXT_SPAM_SCORE_MEDIUM_RISK);
-    let unknown = SpamState::MaybeSpam(TEXT_SPAM_SCORE_UNKNOWN_RISK);
-    let no_risk = SpamState::MaybeSpam(0);
+    let medium = SpamState::with_score(TEXT_SPAM_SCORE_MEDIUM_RISK);
+    let unknown = SpamState::with_score(TEXT_SPAM_SCORE_UNKNOWN_RISK);
+    let no_risk = SpamState::with_score(0);
 
     assert_eq!(no_risk, check_message_text("aaa"));
     assert_eq!(no_risk, check_message_text("test[AAa]test"));
