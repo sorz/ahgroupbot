@@ -1,7 +1,6 @@
 use std::{
     collections::BTreeSet,
     time::{Duration, SystemTime, UNIX_EPOCH},
-    usize,
 };
 
 use teloxide::{Bot, prelude::Requester};
@@ -81,22 +80,36 @@ impl BackgroundSpamCheck {
             })
             .await;
         // Check & ban
-        log::debug!("Suspect user: {suspect_uids:?}");
+        log::debug!("Safe UID: <{safe_uid}; suspect user: {suspect_uids:?}");
         let chats: Vec<_> = self
             .storage
             .with_chats(|chats| chats.map(|(id, ..)| *id).collect())
             .await;
-        for uid in suspect_uids {
-            // Bypass user with photo for now
-            let photos = self.bot.get_user_profile_photos(uid).await?; // FIXME: ignore error
-            log::debug!("User {uid} photo count: {}", photos.total_count);
-            if photos.total_count > 0 {
-                continue;
-            }
-            // Ban on all chats
-            self.storage.update_user(&uid, SpamState::Spam).await;
+        'suspect_uids: for uid in suspect_uids {
+            // Check if user has avatar set
+            let has_avatar = match self.bot.get_user_profile_photos(uid).await {
+                Ok(photos) => photos.total_count > 0,
+                Err(err) => {
+                    log::warn!("Failed to get user profile photos: {err}");
+                    true // Assume they have
+                }
+            };
+            // Check if user has handle/username set, which can only be check with chat id
+            let mut checked = false;
             for chat in chats.iter() {
                 if let Ok(member) = self.bot.get_chat_member(*chat, uid).await {
+                    if !checked {
+                        let has_handle = member.user.username.is_some();
+                        if has_handle && has_avatar {
+                            log::debug!(
+                                "Skip [{}]({uid}) with handle & avatar",
+                                member.user.full_name()
+                            );
+                            continue 'suspect_uids;
+                        }
+                        self.storage.update_user(&uid, SpamState::Spam).await;
+                        checked = true;
+                    }
                     if member.is_present() {
                         self.actions.spawn_ban_user(*chat, uid).await;
                     }
@@ -111,7 +124,7 @@ impl BackgroundSpamCheck {
 /// Optizimed for `k` > 50. No duplicate items in `nums`.
 /// Panic if `k` is not in [0, 100]
 fn percentile<N: Ord>(k: f32, nums: Vec<N>) -> Option<N> {
-    if k < 0.0 || k > 100.0 {
+    if !(0.0..=100.0).contains(&k) {
         panic!("k = {k} is not in [0, 100]");
     }
     // We only optimize for `k` > 50, hence keep the max some items.
