@@ -10,8 +10,7 @@ use crate::{Actions, SpamState, storage::Storage};
 
 static CHECK_INTERVAL: Duration = Duration::from_secs(20 * 60);
 static MIN_AUTHENTIC_USERS: usize = 10;
-static UID_PERCENTILE: f32 = 95.0;
-static UID_MARGIN: f32 = 1.1;
+static UID_PERCENTILE: f32 = 98.0;
 static NEW_USER_GRACE_TIME: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
@@ -59,7 +58,6 @@ impl BackgroundSpamCheck {
         }
         // Anyone with uid < safe_uid are safe (unlikey be spam)
         let safe_uid = percentile(UID_PERCENTILE, uids).unwrap();
-        let safe_uid = (safe_uid as f32 * UID_MARGIN).round() as u64;
         let grace_ts = (SystemTime::now() - NEW_USER_GRACE_TIME)
             .duration_since(UNIX_EPOCH)?
             .as_secs();
@@ -79,37 +77,16 @@ impl BackgroundSpamCheck {
                     .collect()
             })
             .await;
-        // Check & ban
+        // Ban in all chats
         log::debug!("Safe UID: <{safe_uid}; suspect user: {suspect_uids:?}");
         let chats: Vec<_> = self
             .storage
             .with_chats(|chats| chats.map(|(id, ..)| *id).collect())
             .await;
-        'suspect_uids: for uid in suspect_uids {
-            // Check if user has avatar set
-            let has_avatar = match self.bot.get_user_profile_photos(uid).await {
-                Ok(photos) => photos.total_count > 0,
-                Err(err) => {
-                    log::warn!("Failed to get user profile photos: {err}");
-                    true // Assume they have
-                }
-            };
-            // Check if user has handle/username set, which can only be check with chat id
-            let mut checked = false;
+        for uid in suspect_uids {
+            self.storage.update_user(&uid, SpamState::Spam).await;
             for chat in chats.iter() {
                 if let Ok(member) = self.bot.get_chat_member(*chat, uid).await {
-                    if !checked {
-                        let has_handle = member.user.username.is_some();
-                        if has_handle && has_avatar {
-                            log::debug!(
-                                "Skip [{}]({uid}) with handle & avatar",
-                                member.user.full_name()
-                            );
-                            continue 'suspect_uids;
-                        }
-                        self.storage.update_user(&uid, SpamState::Spam).await;
-                        checked = true;
-                    }
                     if member.is_present() {
                         self.actions.spawn_ban_user(*chat, uid).await;
                     }
