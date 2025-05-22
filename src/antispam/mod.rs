@@ -37,7 +37,7 @@ static RE_SPAM_NO_RISK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"阿|啊|[aA]{3,}|[aA][hH]+").unwrap());
 
 static RE_SPAM_FULL_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"🔥|看主页|看竹页|会员|会員|赚钱|达利|来了|来咯|[\u206a-\u206f]").unwrap()
+    Regex::new(r"🔥|看(主|竹)页|会(员|員)|赚钱|达利|^dali|来(了|咯)|[\u206a-\u206f]").unwrap()
 });
 
 pub(crate) static SPAM_THREHOLD: u8 = 100;
