@@ -5,8 +5,8 @@ use teloxide::{
     dispatching::dialogue::GetChatId,
     prelude::Requester,
     types::{
-        ChatId, ChatKind, Message, MessageEntityKind, MessageId, MessageKind, Sticker, Update,
-        UpdateKind, UserId,
+        ChatId, ChatKind, ChatMemberKind, ChatMemberUpdated, Message, MessageEntityKind, MessageId,
+        MessageKind, Sticker, Update, UpdateKind, UserId,
     },
 };
 
@@ -26,13 +26,14 @@ static ALLOWED_STICKER_FILE_IDS: LazyLock<HashSet<&'static str>> = LazyLock::new
 pub enum Action {
     Accept,
     Delete(ChatId, MessageId),
+    Ban(ChatId, UserId),
     DeleteAndBan(ChatId, MessageId, UserId),
 }
 
 impl Action {
     pub fn get_delete(&self) -> Option<(ChatId, MessageId)> {
         match self {
-            Self::Accept => None,
+            Self::Accept | Self::Ban(..) => None,
             Self::Delete(chat, msg) | Self::DeleteAndBan(chat, msg, _) => Some((*chat, *msg)),
         }
     }
@@ -40,6 +41,7 @@ impl Action {
     pub fn get_ban(&self) -> Option<(ChatId, UserId)> {
         match self {
             Self::Accept | Self::Delete(_, _) => None,
+            Self::Ban(chat, user) => Some((*chat, *user)),
             Self::DeleteAndBan(chat, _, user) => Some((*chat, *user)),
         }
     }
@@ -78,21 +80,6 @@ impl PolicyState {
             | MessageKind::NewChatPhoto(_)
             | MessageKind::DeleteChatPhoto(_)
             | MessageKind::Pinned(_) => return Action::Accept,
-            // Screen new user for spammer
-            MessageKind::NewChatMembers(ref members) => {
-                for member in &members.new_chat_members {
-                    let fullname = member.full_name();
-                    info!(
-                        "[{}] New user [{}]({}) join",
-                        message.chat.id, member.id, fullname,
-                    );
-                    if check_full_name_likely_spammer(&fullname) {
-                        // Fast path to ban
-                        info!("Ban user [{}] for their name", fullname);
-                        return Action::DeleteAndBan(chat_id, message.id, member.id);
-                    }
-                }
-            }
             // Check normal messages
             MessageKind::Common(_) => (),
             // Delete others
@@ -167,6 +154,41 @@ impl PolicyState {
         Action::Accept
     }
 
+    async fn check_member(&self, chat_id: ChatId, update: &ChatMemberUpdated) -> Action {
+        let user = &update.new_chat_member.user;
+        match &update.new_chat_member.kind {
+            ChatMemberKind::Member => {
+                // Screen user name for spammer
+                let fullname = user.full_name();
+                info!("[{}] New user [{}]({}) join", chat_id, user.id, fullname);
+                if check_full_name_likely_spammer(&fullname) {
+                    info!("Ban user [{fullname}]({}) for their name", user.id);
+                    Action::Ban(chat_id, user.id)
+                } else if update.via_chat_folder_invite_link {
+                    info!("Ban user [{fullname}]({}) via chat folder invite", user.id);
+                    Action::Ban(chat_id, user.id)
+                } else {
+                    self.db.update_user(&user.id, SpamState::default()).await;
+                    Action::Accept
+                }
+            }
+            ChatMemberKind::Left => {
+                info!("[{chat_id}] User [{}]({}) left", user.id, user.full_name());
+                Action::Accept
+            }
+            ChatMemberKind::Banned(_) => {
+                info!(
+                    "[{chat_id}] User [{}]({}) banned by {}",
+                    user.id,
+                    user.full_name(),
+                    update.from.full_name()
+                );
+                Action::Accept
+            }
+            _ => Action::Accept,
+        }
+    }
+
     pub async fn check_update(&mut self, update: &Update) -> Action {
         if let UpdateKind::Error(value) = &update.kind {
             info!(
@@ -185,6 +207,7 @@ impl PolicyState {
         };
         if let ChatKind::Public(_) = chat.kind {
             match update.kind {
+                UpdateKind::ChatMember(ref update) => self.check_member(chat.id, update).await,
                 UpdateKind::Message(ref msg) => self.check_message(chat.id, msg).await,
                 UpdateKind::EditedMessage(ref msg) => Action::Delete(chat.id, msg.id),
                 _ => Action::Accept,

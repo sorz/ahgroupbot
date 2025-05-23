@@ -4,7 +4,8 @@ use log::{debug, info, warn};
 use std::{env, fs, path::PathBuf, time::Duration};
 use teloxide::{
     Bot, RequestError,
-    update_listeners::{AsUpdateStream, polling_default},
+    types::AllowedUpdate,
+    update_listeners::{AsUpdateStream, UpdateListener, polling_default},
 };
 use tokio::time::sleep;
 
@@ -49,6 +50,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mut poll = polling_default(bot.clone()).await;
+    let mut allowed_updates = [
+        AllowedUpdate::Message,
+        AllowedUpdate::EditedMessage,
+        AllowedUpdate::ChatMember,
+    ]
+    .into_iter();
+    poll.hint_allowed_updates(&mut allowed_updates);
     let mut stream = Box::pin(poll.as_stream());
     let mut retry_count = 0u32;
     info!("AhGroupBot started");
