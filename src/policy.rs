@@ -183,6 +183,7 @@ impl PolicyState {
                     user.full_name(),
                     update.from.full_name()
                 );
+                self.db.remove_user(&user.id).await;
                 Action::Accept
             }
             _ => Action::Accept,

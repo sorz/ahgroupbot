@@ -102,6 +102,10 @@ impl Storage {
         self.inner.lock().await.data.chats.get(chat_id).cloned()
     }
 
+    pub(crate) async fn remove_user(&self, user_id: &UserId) {
+        self.inner.lock().await.data.users.remove(user_id);
+    }
+
     pub(crate) async fn update_chat(
         &self,
         chat_id: &ChatId,
