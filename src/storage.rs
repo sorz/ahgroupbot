@@ -1,15 +1,12 @@
 use std::{
-    collections::{
-        HashMap,
-        hash_map::{self, Entry},
-    },
+    collections::{HashMap, hash_map},
     path::Path,
     sync::Arc,
 };
 
 use anyhow::anyhow;
 use sonic_rs::{Deserialize, Serialize};
-use teloxide::types::{ChatId, UserId};
+use teloxide::types::UserId;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom},
@@ -18,9 +15,21 @@ use tokio::{
 
 use crate::antispam::SpamState;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct AhCount {
+    pub uid: UserId,
+    pub noa: u32, // Number of "ah"
+}
+
+impl AhCount {
+    pub fn new(uid: UserId, noa: u32) -> Self {
+        Self { uid, noa }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Data {
-    pub chats: HashMap<ChatId, (UserId, u32)>,
+    pub last_ah: Option<AhCount>,
     pub users: HashMap<UserId, SpamState>,
 }
 
@@ -98,33 +107,25 @@ impl Storage {
             .unwrap_or_default()
     }
 
-    pub(crate) async fn get_chat(&self, chat_id: &ChatId) -> Option<(UserId, u32)> {
-        self.inner.lock().await.data.chats.get(chat_id).cloned()
-    }
-
     pub(crate) async fn remove_user(&self, user_id: &UserId) {
         self.inner.lock().await.data.users.remove(user_id);
     }
 
-    pub(crate) async fn update_chat(
-        &self,
-        chat_id: &ChatId,
-        (user_id, noa): (UserId, u32),
-    ) -> anyhow::Result<()> {
-        match self.inner.lock().await.data.chats.entry(*chat_id) {
-            Entry::Occupied(mut e) => {
-                if e.get().0 == user_id {
+    pub(crate) async fn update_last_ah(&self, new_ah: AhCount) -> anyhow::Result<()> {
+        match self.inner.lock().await.data.last_ah {
+            Some(ref mut last_ah) => {
+                if last_ah.uid == new_ah.uid {
                     Err(anyhow!("No single-user flooding"))
-                } else if noa > 3 && noa > e.get().1 + 1 {
+                } else if new_ah.noa > 3 && new_ah.noa > last_ah.noa + 1 {
                     Err(anyhow!("No too many ah in a single message"))
                 } else {
-                    e.insert((user_id, noa));
+                    *last_ah = new_ah;
                     Ok(())
                 }
             }
-            Entry::Vacant(e) => {
-                // For group w/o history, anyone & any noa is allowed
-                e.insert((user_id, noa));
+            ref mut last_ah @ None => {
+                // If no history, anyone & any noa is allowed
+                *last_ah = Some(new_ah);
                 Ok(())
             }
         }
@@ -138,15 +139,6 @@ impl Storage {
         let iter = inner.data.users.iter();
         f(iter)
     }
-
-    pub(crate) async fn with_chats<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(hash_map::Iter<ChatId, (UserId, u32)>) -> R,
-    {
-        let inner = self.inner.lock().await;
-        let iter = inner.data.chats.iter();
-        f(iter)
-    }
 }
 
 #[tokio::test]
@@ -156,40 +148,40 @@ async fn test_storage() {
     let path = temp_dir.path().join("test.json");
     let mut storage = Storage::open(&path).await.unwrap();
 
-    // Chat ops
+    // Ah count
     storage
-        .update_chat(&ChatId(1), (UserId(1), 10))
+        .update_last_ah(AhCount::new(UserId(1), 10))
         .await
         .unwrap();
     storage
-        .update_chat(&ChatId(1), (UserId(2), 5))
+        .update_last_ah(AhCount::new(UserId(2), 5))
         .await
         .unwrap();
     storage
-        .update_chat(&ChatId(1), (UserId(1), 6))
+        .update_last_ah(AhCount::new(UserId(1), 6))
         .await
         .unwrap();
     storage
-        .update_chat(&ChatId(1), (UserId(2), 1))
+        .update_last_ah(AhCount::new(UserId(2), 1))
         .await
         .unwrap();
     storage
-        .update_chat(&ChatId(1), (UserId(1), 3))
+        .update_last_ah(AhCount::new(UserId(1), 3))
         .await
         .unwrap();
     storage
-        .update_chat(&ChatId(1), (UserId(2), 3))
+        .update_last_ah(AhCount::new(UserId(2), 3))
         .await
         .unwrap();
     assert!(
         storage
-            .update_chat(&ChatId(1), (UserId(1), 5))
+            .update_last_ah(AhCount::new(UserId(1), 5))
             .await
             .is_err()
     );
     assert!(
         storage
-            .update_chat(&ChatId(1), (UserId(2), 4))
+            .update_last_ah(AhCount::new(UserId(2), 4))
             .await
             .is_err()
     );

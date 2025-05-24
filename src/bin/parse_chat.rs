@@ -13,7 +13,7 @@ use std::{
 };
 use teloxide::types::{ChatId, UserId};
 
-use ahgroupbot::{SpamState, StorageData};
+use ahgroupbot::{AhCount, SpamState, StorageData};
 
 static RE_USER_ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^(user|channel)(\d+)$").unwrap());
@@ -74,7 +74,7 @@ impl TextSegment {
 }
 
 impl Message {
-    fn parse_user_noa(&self) -> anyhow::Result<(UserId, u32)> {
+    fn parse_user_noa(&self) -> anyhow::Result<AhCount> {
         match self {
             Self::Service => bail!("service message, not a user text message"),
             Self::Message { text, from_id } => {
@@ -83,7 +83,7 @@ impl Message {
                     .captures(from_id)
                     .ok_or_else(|| anyhow!("from_id ({}) not match regex", from_id))?;
                 let id = captures.get(2).unwrap().as_str();
-                Ok((UserId(id.parse()?), noa))
+                Ok(AhCount::new(UserId(id.parse()?), noa))
             }
         }
     }
@@ -100,22 +100,22 @@ fn main() -> anyhow::Result<()> {
     for path in paths {
         eprintln!("Parsing chat history {:?}", path);
         buf.clear();
-        let mut last_user_noa: Option<(UserId, u32)> = None;
+        let mut last_ah: Option<AhCount> = None;
         File::open(&path)?.read_to_end(&mut buf)?;
         let history: ChatHistory = sonic_rs::from_slice(&buf)?;
         for (msg_id, msg) in history.messages.iter().enumerate() {
             match msg.parse_user_noa() {
-                Ok((user_id, noa)) => {
-                    output_state.users.insert(user_id, SpamState::Authentic);
-                    last_user_noa = Some((user_id, noa));
+                Ok(ah) => {
+                    output_state.users.insert(ah.uid, SpamState::Authentic);
+                    last_ah = Some(ah);
                 }
                 Err(err) => {
                     eprintln!("Msg#{:06} - ignored: {}", msg_id, err);
                 }
             }
         }
-        if let Some(user_noa) = last_user_noa {
-            output_state.chats.insert(history.id, user_noa);
+        if let Some(ah) = last_ah {
+            output_state.last_ah = Some(ah);
         }
     }
     // TODO: use to_writer_pretty after sonic_rs v0.4 released

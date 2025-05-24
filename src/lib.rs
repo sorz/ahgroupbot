@@ -6,4 +6,4 @@ mod storage;
 pub use action::Actions;
 pub use antispam::{SpamState, background::BackgroundSpamCheck};
 pub use policy::PolicyState;
-pub use storage::{Data as StorageData, Storage};
+pub use storage::{AhCount, Data as StorageData, Storage};

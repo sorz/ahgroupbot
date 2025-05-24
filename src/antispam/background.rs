@@ -3,7 +3,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use teloxide::{Bot, prelude::Requester};
+use teloxide::{Bot, prelude::Requester, types::ChatId};
 use tokio::time::MissedTickBehavior;
 
 use crate::{Actions, SpamState, storage::Storage};
@@ -18,14 +18,16 @@ pub struct BackgroundSpamCheck {
     bot: Bot,
     storage: Storage,
     actions: Actions,
+    cid: ChatId,
 }
 
 impl BackgroundSpamCheck {
-    pub fn new(bot: Bot, storage: Storage, actions: Actions) -> Self {
+    pub fn new(bot: Bot, storage: Storage, actions: Actions, cid: ChatId) -> Self {
         Self {
             bot,
             storage,
             actions,
+            cid,
         }
     }
 
@@ -79,17 +81,11 @@ impl BackgroundSpamCheck {
             .await;
         // Ban in all chats
         log::debug!("Safe UID: <{safe_uid}; suspect user: {suspect_uids:?}");
-        let chats: Vec<_> = self
-            .storage
-            .with_chats(|chats| chats.map(|(id, ..)| *id).collect())
-            .await;
         for uid in suspect_uids {
             self.storage.update_user(&uid, SpamState::Spam).await;
-            for chat in chats.iter() {
-                if let Ok(member) = self.bot.get_chat_member(*chat, uid).await {
-                    if member.is_present() {
-                        self.actions.spawn_ban_user(*chat, uid).await;
-                    }
+            if let Ok(member) = self.bot.get_chat_member(self.cid, uid).await {
+                if member.is_present() {
+                    self.actions.spawn_ban_user(self.cid, uid).await;
                 }
             }
         }

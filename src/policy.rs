@@ -12,7 +12,7 @@ use teloxide::{
 
 use crate::{
     antispam::{SpamState, check_full_name_likely_spammer, check_message_text},
-    storage::Storage,
+    storage::{AhCount, Storage},
 };
 
 static ALLOWED_STICKER_FILE_IDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
@@ -51,11 +51,12 @@ impl Action {
 pub struct PolicyState {
     bot: Bot,
     db: Storage,
+    cid: ChatId,
 }
 
 impl PolicyState {
-    pub async fn new(bot: Bot, db: Storage) -> anyhow::Result<Self> {
-        Ok(Self { bot, db })
+    pub async fn new(bot: Bot, db: Storage, cid: ChatId) -> anyhow::Result<Self> {
+        Ok(Self { bot, db, cid })
     }
 
     pub async fn save(&mut self) -> anyhow::Result<()> {
@@ -145,7 +146,7 @@ impl PolicyState {
             Some(text) => (text.len() / 3).try_into().expect("Toooooo mmmany ah"),
         };
 
-        if let Err(err) = self.db.update_chat(&chat_id, (uid, noa)).await {
+        if let Err(err) = self.db.update_last_ah(AhCount::new(uid, noa)).await {
             debug!("Reject message from [{}]: {}", uid, err);
             return action_delete;
         }
@@ -206,6 +207,10 @@ impl PolicyState {
             Some(chat) => chat,
             None => return Action::Accept,
         };
+        if chat.id != self.cid {
+            info!("Ignore foreign chat {}", chat.id);
+            return Action::Accept;
+        }
         if let ChatKind::Public(_) = chat.kind {
             match update.kind {
                 UpdateKind::ChatMember(ref update) => self.check_member(chat.id, update).await,

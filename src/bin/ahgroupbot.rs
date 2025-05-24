@@ -1,10 +1,11 @@
 use ahgroupbot::{Actions, BackgroundSpamCheck, PolicyState, Storage};
+use anyhow::bail;
 use futures::StreamExt;
 use log::{debug, info, warn};
 use std::{env, fs, path::PathBuf, time::Duration};
 use teloxide::{
     Bot, RequestError,
-    types::AllowedUpdate,
+    types::{AllowedUpdate, ChatId},
     update_listeners::{AsUpdateStream, UpdateListener, polling_default},
 };
 use tokio::time::sleep;
@@ -17,8 +18,9 @@ const MAX_RETRY: u32 = 5;
 const RETRY_BASE_DELAY: Duration = Duration::from_secs(2);
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     env_logger::init();
+    // Get API token
     let mut token_path: PathBuf = env::var("CREDENTIALS_DIRECTORY")
         .unwrap_or_else(|_| "./".into())
         .into();
@@ -31,20 +33,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     })?;
 
+    // Get db path
     let mut db_path = env::var("STATE_DIRECTORY")
         .map(|p| p.into())
         .or_else(|_| env::current_dir())
         .expect("STATE_DIRECTORY not a valid path");
     db_path.push("state.json");
 
+    // Get Chat ID
+    let cid = match env::args_os()
+        .skip(1)
+        .next()
+        .map(|s| s.to_string_lossy().parse())
+    {
+        Some(Ok(cid)) => ChatId(cid),
+        Some(Err(err)) => bail!("Not a valid Chat ID: {err}"),
+        None => bail!("Missing Chat ID on CLI argument"),
+    };
+
     let bot = Bot::new(token.trim());
     let storage = Storage::open(&db_path).await?;
     let actions = Actions::new(&bot, MAX_OUTSTANDING_REQUESTS, MAX_RETRY);
-    let mut policy = PolicyState::new(bot.clone(), storage.clone())
+    let mut policy = PolicyState::new(bot.clone(), storage.clone(), cid)
         .await
         .expect("Failed to open/create policy state file");
 
-    let background = BackgroundSpamCheck::new(bot.clone(), storage, actions.clone());
+    let background = BackgroundSpamCheck::new(bot.clone(), storage, actions.clone(), cid);
     tokio::spawn(async move {
         background.launch().await;
     });
