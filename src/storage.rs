@@ -187,13 +187,17 @@ async fn test_storage() {
     );
 
     // Spam state ops
-    assert_eq!(
-        storage.update_user(&UserId(1), SpamState::Spam).await,
-        SpamState::Spam
+    assert!(
+        storage
+            .update_user(&UserId(1), SpamState::new_spam())
+            .await
+            .is_spam()
     );
-    assert_eq!(
-        storage.update_user(&UserId(1), SpamState::Authentic).await,
-        SpamState::Authentic
+    assert!(
+        storage
+            .update_user(&UserId(1), SpamState::Authentic)
+            .await
+            .is_authentic()
     );
     assert_eq!(
         storage
@@ -207,17 +211,17 @@ async fn test_storage() {
             .await,
         SpamState::with_score(30)
     );
-    assert_eq!(
+    assert!(
         storage
             .update_user(&UserId(2), SpamState::with_score(SPAM_THREHOLD - 10))
-            .await,
-        SpamState::Spam
+            .await
+            .is_spam()
     );
-    assert_eq!(
+    assert!(
         storage
             .update_user(&UserId(2), SpamState::with_score(1))
-            .await,
-        SpamState::Spam
+            .await
+            .is_spam()
     );
     storage
         .update_user(&UserId(3), SpamState::with_score(20))
@@ -227,7 +231,7 @@ async fn test_storage() {
 
     let storage = Storage::open(&path).await.unwrap();
     assert_eq!(storage.get_user(&UserId(1)).await, SpamState::Authentic);
-    assert_eq!(storage.get_user(&UserId(2)).await, SpamState::Spam);
+    assert!(storage.get_user(&UserId(2)).await.is_spam());
     assert_eq!(
         storage.get_user(&UserId(3)).await,
         SpamState::with_score(20)

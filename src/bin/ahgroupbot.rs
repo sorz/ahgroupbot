@@ -41,11 +41,7 @@ async fn main() -> anyhow::Result<()> {
     db_path.push("state.json");
 
     // Get Chat ID
-    let cid = match env::args_os()
-        .skip(1)
-        .next()
-        .map(|s| s.to_string_lossy().parse())
-    {
+    let cid = match env::args_os().nth(1).map(|s| s.to_string_lossy().parse()) {
         Some(Ok(cid)) => ChatId(cid),
         Some(Err(err)) => bail!("Not a valid Chat ID: {err}"),
         None => bail!("Missing Chat ID on CLI argument"),

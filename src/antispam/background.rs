@@ -67,13 +67,13 @@ impl BackgroundSpamCheck {
             .storage
             .with_user_states(|user_states| {
                 user_states
-                    .filter(|(uid, _)| uid.0 > safe_uid)
                     .filter_map(|(uid, state)| match state {
                         SpamState::MaybeSpam { create_ts_secs, .. }
-                            if *create_ts_secs < grace_ts =>
+                            if uid.0 > safe_uid && *create_ts_secs < grace_ts =>
                         {
                             Some(*uid)
                         }
+                        _ if state.is_spam() => Some(*uid),
                         _ => None,
                     })
                     .collect()
@@ -82,10 +82,12 @@ impl BackgroundSpamCheck {
         // Ban in all chats
         log::debug!("Safe UID: <{safe_uid}; suspect user: {suspect_uids:?}");
         for uid in suspect_uids {
-            self.storage.update_user(&uid, SpamState::Spam).await;
+            self.storage.update_user(&uid, SpamState::new_spam()).await;
             if let Ok(member) = self.bot.get_chat_member(self.cid, uid).await {
                 if member.is_present() {
                     self.actions.spawn_ban_user(self.cid, uid).await;
+                } else {
+                    self.storage.remove_user(&uid).await;
                 }
             }
         }
