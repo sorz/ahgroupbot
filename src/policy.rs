@@ -1,5 +1,5 @@
 use log::{debug, info, warn};
-use std::{borrow::Cow, collections::HashSet, convert::TryInto, sync::LazyLock};
+use std::{borrow::Cow, convert::TryInto};
 use teloxide::{
     Bot,
     dispatching::dialogue::GetChatId,
@@ -14,13 +14,6 @@ use crate::{
     antispam::{SpamState, check_full_name_likely_spammer, check_message_text},
     storage::{AhCount, Storage},
 };
-
-static ALLOWED_STICKER_FILE_IDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    include_str!("stickers.txt")
-        .lines()
-        .filter(|l| !l.starts_with('#') && !l.is_empty())
-        .collect()
-});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
@@ -86,10 +79,10 @@ impl PolicyState {
             // Delete others
             _ => return action_delete,
         }
-        let uid = match &message.from {
+        let user = match &message.from {
             // No (other) bots
             Some(user) if user.is_bot => return action_delete,
-            Some(user) => user.id,
+            Some(user) => user,
             None => return Action::Accept,
         };
 
@@ -110,9 +103,9 @@ impl PolicyState {
             .flatten()
             .map(check_message_text)
             .sum();
-        let spam_state = self.db.update_user(&uid, spam_state).await;
+        let spam_state = self.db.update_user(&user.id, spam_state).await;
         if spam_state.is_spam() {
-            return Action::DeleteAndBan(chat_id, message.id, uid);
+            return Action::DeleteAndBan(chat_id, message.id, user.id);
         }
 
         if message.reply_to_message().is_some() || message.quote().is_some() {
@@ -135,9 +128,29 @@ impl PolicyState {
         // Count the number of ah (noa)
         let noa = match message.text() {
             None => match message.sticker() {
-                // Treat allowed sticker as single 啊
-                Some(sticker) if ALLOWED_STICKER_FILE_IDS.contains(&*sticker.file.unique_id) => 1,
-                // No neither-text-or-allowed-sticker messages
+                Some(sticker) => {
+                    let file_id = sticker.file.unique_id.as_str();
+                    if self.db.is_sticker_allowed(file_id).await {
+                        // Treat allowed sticker as single 啊
+                        1
+                    } else if self
+                        .bot
+                        .get_chat_member(self.cid, user.id)
+                        .await
+                        .map(|member| member.is_privileged())
+                        .unwrap_or_default()
+                    {
+                        // Allow admin to modify the allow list
+                        info!("New sticker {file_id} added by {}", user.full_name());
+                        self.db.add_allowed_sticker(file_id.to_string()).await;
+                        1
+                    } else {
+                        // For other sitckers, delete
+                        debug!("Sticker {file_id} is not in allowed list");
+                        return action_delete;
+                    }
+                }
+                // No text & no sticker?
                 _ => return action_delete,
             },
             // 啊+ only
@@ -146,12 +159,12 @@ impl PolicyState {
             Some(text) => (text.len() / 3).try_into().expect("Toooooo mmmany ah"),
         };
 
-        if let Err(err) = self.db.update_last_ah(AhCount::new(uid, noa)).await {
-            debug!("Reject message from [{}]: {}", uid, err);
+        if let Err(err) = self.db.update_last_ah(AhCount::new(user.id, noa)).await {
+            debug!("Reject message from [{}]: {}", user.id, err);
             return action_delete;
         }
         // Now they're a trusted user
-        self.db.update_user(&uid, SpamState::Authentic).await;
+        self.db.update_user(&user.id, SpamState::Authentic).await;
         Action::Accept
     }
 

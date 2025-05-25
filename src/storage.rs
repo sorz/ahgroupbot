@@ -1,5 +1,6 @@
 use std::{
-    collections::{HashMap, hash_map},
+    borrow::Borrow,
+    collections::{HashMap, HashSet, hash_map},
     path::Path,
     sync::Arc,
 };
@@ -31,6 +32,7 @@ impl AhCount {
 pub struct Data {
     pub last_ah: Option<AhCount>,
     pub users: HashMap<UserId, SpamState>,
+    pub allowed_stickers: HashSet<String>, // file_id
 }
 
 #[derive(Debug, Clone)]
@@ -139,6 +141,24 @@ impl Storage {
         let iter = inner.data.users.iter();
         f(iter)
     }
+
+    pub(crate) async fn add_allowed_sticker(&self, file_id: String) {
+        self.inner
+            .lock()
+            .await
+            .data
+            .allowed_stickers
+            .insert(file_id);
+    }
+
+    pub(crate) async fn is_sticker_allowed<I: Borrow<str>>(&self, file_id: I) -> bool {
+        self.inner
+            .lock()
+            .await
+            .data
+            .allowed_stickers
+            .contains(file_id.borrow())
+    }
 }
 
 #[tokio::test]
@@ -229,6 +249,13 @@ async fn test_storage() {
     storage.save().await.unwrap();
     storage.save().await.unwrap(); // redundancy
 
+    // Sticker
+    assert!(!storage.is_sticker_allowed("foo").await);
+    storage.add_allowed_sticker("foo".to_string()).await;
+    assert!(storage.is_sticker_allowed("foo").await);
+    assert!(!storage.is_sticker_allowed("bar").await);
+
+    // Read & write
     let storage = Storage::open(&path).await.unwrap();
     assert_eq!(storage.get_user(&UserId(1)).await, SpamState::Authentic);
     assert!(storage.get_user(&UserId(2)).await.is_spam());
