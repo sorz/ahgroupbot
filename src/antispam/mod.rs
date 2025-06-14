@@ -15,10 +15,10 @@ static RE_SPAM_HIGH_RISK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"(\d|黑|搬|送|)(U|u)|开户|(会|會)(员|員)|收入|接入|免费|完整版|",
         r"兼职|专职|咨询|日结|小白|钱|赚|支付|风险|主页|介绍|TRX|散户|",
-        r"母狗|轮流|内射|\d\d岁|学妹|初中|高中|大学|金主|爸爸|老公|白眼|",
-        r"团队|专线|代理|合作|保底|日入|商家|红包|盘口|急需|吋|侑|莳|玖|",
-        r"(预|預)(付|服)|搬砖|玳|代付|点位|(滴|嘀)(窝|我)|群演|助手|",
-        r"做工|招人|捡漏|项目|视频|",
+        r"母狗|轮流|内射|\d\d岁|学妹|初中|高中|大学|金主|爸爸|老公|白眼|小姨|娇羞|",
+        r"团队|专线|代理|合作|保底|日入|商家|红包|盘口|急需|",
+        r"(预|預)(付|服)|搬砖|代付|点位|(滴|嘀)(窝|我)|群演|助手|",
+        r"做工|招人|捡漏|项目|视频|玳|吋|侑|莳|玖|漺|搔|绌|徦|単|",
         r"💵|💯|🧧|📣|➡️|⬅️|👉|👈",
     ))
     .unwrap()
@@ -37,7 +37,7 @@ static RE_SPAM_NO_RISK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"阿|啊|[aA]{3,}|[aA][hH]+").unwrap());
 
 static RE_SPAM_FULL_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"🔥|看(主|竹)页|会(员|員)|赚钱|达利|^dali|来(了|咯)|[\u206a-\u206f]").unwrap()
+    Regex::new(r"会(员|員)|飛机|群(發|发)|达利|^dali|°$|[\u206a-\u206f]").unwrap()
 });
 
 pub(crate) static SPAM_THREHOLD: u8 = 100;
@@ -226,8 +226,8 @@ fn test_spam_text() {
 
 #[test]
 fn test_spam_name() {
-    assert!(check_full_name_likely_spammer("立即来🔥赚麻了"));
-    assert!(check_full_name_likely_spammer("来看竹页吧"));
+    assert!(check_full_name_likely_spammer("开会员123"));
+    assert!(check_full_name_likely_spammer("肥猪流°"));
     assert!(check_full_name_likely_spammer("legacy\u{206e}codepint"));
     assert!(!check_full_name_likely_spammer("_(:з」∠)_"));
     assert!(!check_full_name_likely_spammer("啊啊|赚钱"));
