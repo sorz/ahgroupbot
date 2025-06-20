@@ -129,7 +129,7 @@ impl PolicyState {
         let noa = match message.text() {
             None => match message.sticker() {
                 Some(sticker) => {
-                    let file_id = sticker.file.unique_id.as_str();
+                    let file_id = sticker.file.unique_id.0.as_str();
                     if self.db.is_sticker_allowed(file_id).await {
                         // Treat allowed sticker as single 啊
                         1
@@ -171,7 +171,7 @@ impl PolicyState {
     async fn check_member(&self, chat_id: ChatId, update: &ChatMemberUpdated) -> Action {
         let user = &update.new_chat_member.user;
         match &update.new_chat_member.kind {
-            ChatMemberKind::Member => {
+            ChatMemberKind::Member(_) => {
                 // Screen user name for spammer
                 let fullname = user.full_name();
                 info!("[{}] New user [{}]({}) join", chat_id, user.id, fullname);
