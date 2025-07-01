@@ -36,9 +36,12 @@ static RE_SPAM_MEDIUM_RISK: LazyLock<Regex> = LazyLock::new(|| {
 static RE_SPAM_NO_RISK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"阿|啊|[aA]{3,}|[aA][hH]+").unwrap());
 
-static RE_SPAM_FULL_NAME: LazyLock<Regex> = LazyLock::new(|| {
+static RE_SPAM_FULL_NAME_HIGH: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"🔥|看(主|竹)页|会(员|員)|飛机|群(發|发)|达利|^dali|°$|[\u206a-\u206f]").unwrap()
 });
+
+static RE_SPAM_FULL_NAME_MEDIUM: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Z][a-z0-9]{0,2}$").unwrap());
 
 pub(crate) static SPAM_THREHOLD: u8 = 100;
 static TEXT_SPAM_SCORE_MEDIUM_RISK: u8 = SPAM_THREHOLD / 2;
@@ -145,11 +148,22 @@ pub fn check_message_text<T: AsRef<str>>(text: T) -> SpamState {
     }
 }
 
-pub fn check_full_name_likely_spammer(name: &str) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpamLikelihood {
+    Low,
+    Medium,
+    High,
+}
+
+pub fn check_full_name_likely_spammer(name: &str) -> SpamLikelihood {
     if name.contains('|') || name.contains('｜') {
-        false
+        SpamLikelihood::Low
+    } else if RE_SPAM_FULL_NAME_HIGH.is_match(name) {
+        SpamLikelihood::High
+    } else if RE_SPAM_FULL_NAME_MEDIUM.is_match(name) {
+        SpamLikelihood::Medium
     } else {
-        RE_SPAM_FULL_NAME.is_match(name)
+        SpamLikelihood::Low
     }
 }
 
@@ -226,9 +240,34 @@ fn test_spam_text() {
 
 #[test]
 fn test_spam_name() {
-    assert!(check_full_name_likely_spammer("开会员123"));
-    assert!(check_full_name_likely_spammer("肥猪流°"));
-    assert!(check_full_name_likely_spammer("legacy\u{206e}codepint"));
-    assert!(!check_full_name_likely_spammer("_(:з」∠)_"));
-    assert!(!check_full_name_likely_spammer("啊啊|赚钱"));
+    assert_eq!(
+        SpamLikelihood::High,
+        check_full_name_likely_spammer("开会员123")
+    );
+    assert_eq!(
+        SpamLikelihood::High,
+        check_full_name_likely_spammer("肥猪流°")
+    );
+    assert_eq!(
+        SpamLikelihood::High,
+        check_full_name_likely_spammer("legacy\u{206e}codepint")
+    );
+    assert_eq!(
+        SpamLikelihood::Medium,
+        check_full_name_likely_spammer("Abc")
+    );
+    assert_eq!(
+        SpamLikelihood::Medium,
+        check_full_name_likely_spammer("A12")
+    );
+    assert_eq!(SpamLikelihood::Low, check_full_name_likely_spammer("abc"));
+    assert_eq!(SpamLikelihood::Low, check_full_name_likely_spammer("Abcd"));
+    assert_eq!(
+        SpamLikelihood::Low,
+        check_full_name_likely_spammer("_(:з」∠)_")
+    );
+    assert_eq!(
+        SpamLikelihood::Low,
+        check_full_name_likely_spammer("啊啊|赚钱")
+    );
 }

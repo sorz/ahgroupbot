@@ -11,7 +11,7 @@ use teloxide::{
 };
 
 use crate::{
-    antispam::{SpamState, check_full_name_likely_spammer, check_message_text},
+    antispam::{SpamLikelihood, SpamState, check_full_name_likely_spammer, check_message_text},
     storage::{AhCount, Storage},
 };
 
@@ -172,18 +172,41 @@ impl PolicyState {
         let user = &update.new_chat_member.user;
         match &update.new_chat_member.kind {
             ChatMemberKind::Member(_) => {
-                // Screen user name for spammer
+                // Screen user profile for spammer
                 let fullname = user.full_name();
                 info!("[{}] New user [{}]({}) join", chat_id, user.id, fullname);
-                if check_full_name_likely_spammer(&fullname) {
-                    info!("Ban user [{fullname}]({}) for their name", user.id);
-                    Action::Ban(chat_id, user.id)
-                } else if update.via_chat_folder_invite_link {
+                // Rule #1: no join via chat folder
+                if update.via_chat_folder_invite_link {
                     info!("Ban user [{fullname}]({}) via chat folder invite", user.id);
                     Action::Ban(chat_id, user.id)
                 } else {
-                    self.db.update_user(&user.id, SpamState::default()).await;
-                    Action::Accept
+                    match check_full_name_likely_spammer(&fullname) {
+                        // Rule #2: no high risk name
+                        SpamLikelihood::High => {
+                            info!("Ban user [{fullname}]({}) for their name", user.id);
+                            Action::Ban(chat_id, user.id)
+                        }
+                        // Rule #2: no medium risk name + empty handle + empty avatar
+                        SpamLikelihood::Medium
+                            if user.mention().is_none()
+                                && self
+                                    .bot
+                                    .get_user_profile_photos(user.id)
+                                    .await
+                                    .map(|p| p.total_count == 0)
+                                    .unwrap_or_default() =>
+                        {
+                            info!(
+                                "Ban user [{fullname}]({}) for their name & empty handle/avator",
+                                user.id
+                            );
+                            Action::Ban(chat_id, user.id)
+                        }
+                        _ => {
+                            self.db.update_user(&user.id, SpamState::default()).await;
+                            Action::Accept
+                        }
+                    }
                 }
             }
             ChatMemberKind::Left => {
