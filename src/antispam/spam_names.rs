@@ -7,6 +7,9 @@ use crate::antispam::now_ts_secs;
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SpamNames(HashMap<String, Encounter>);
 
+static NEVER_STALE_DAYS: u64 = 28;
+static RETURNER_STALE_DAYS: u64 = 90;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Encounter {
     count: usize,
@@ -49,8 +52,9 @@ impl SpamNames {
 
     pub(crate) fn cleanup_stale_entries(&mut self) {
         self.0.retain(|full_name, encounter| {
-            let days = encounter.last_seen_ts_secs / (3600 * 24);
-            let retain = days <= 28 || encounter.count > 1 && days <= 90;
+            let days = (now_ts_secs() - encounter.last_seen_ts_secs) / (3600 * 24);
+            let retain =
+                days <= NEVER_STALE_DAYS || encounter.count > 1 && days <= RETURNER_STALE_DAYS;
             if !retain {
                 log::info!(
                     "Remove stale spam name: {full_name} ({}/{}d)",
@@ -61,4 +65,35 @@ impl SpamNames {
             retain
         });
     }
+}
+
+#[test]
+fn test_stale_cleanup() {
+    let mut names = SpamNames::default();
+    let now = now_ts_secs();
+    let d7 = now_ts_secs() - 7 * 3600 * 24;
+    let d30 = now_ts_secs() - 30 * 3600 * 24;
+    let d100 = now_ts_secs() - 100 * 3600 * 24;
+    let mut insert = |name: &str, count, last_seen_ts_secs| {
+        names.0.insert(
+            name.to_string(),
+            Encounter {
+                count,
+                first_seen_ts_secs: 0,
+                last_seen_ts_secs,
+            },
+        )
+    };
+    insert("now_1", 1, now);
+    insert("d7_1", 1, d7);
+    insert("d30_1", 1, d30); // stale
+    insert("d30_2", 2, d30);
+    insert("d100_9", 9, d100); // stale
+    names.cleanup_stale_entries();
+
+    assert!(names.has_encountered("now_1"));
+    assert!(names.has_encountered("d7_1"));
+    assert!(!names.has_encountered("d30_1"));
+    assert!(names.has_encountered("d30_2"));
+    assert!(!names.has_encountered("d100_9"));
 }
