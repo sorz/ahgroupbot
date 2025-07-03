@@ -188,7 +188,7 @@ impl PolicyState {
                         }
                         // Rule #2: no medium risk name + empty handle + empty avatar
                         SpamLikelihood::Medium
-                            if user.mention().is_none()
+                            if user.username.is_none()
                                 && self
                                     .bot
                                     .get_user_profile_photos(user.id)
