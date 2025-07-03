@@ -84,13 +84,23 @@ impl BackgroundSpamCheck {
         for uid in suspect_uids {
             self.storage.update_user(&uid, SpamState::new_spam()).await;
             if let Ok(member) = self.bot.get_chat_member(self.cid, uid).await {
+                // Ban user
                 if member.is_present() {
                     self.actions.spawn_ban_user(self.cid, uid).await;
                 } else {
                     self.storage.remove_user(&uid).await;
                 }
+                // Update spam name list
+                self.storage
+                    .with_spam_names(|names| names.encounter(member.user.full_name()))
+                    .await;
             }
         }
+        // TODO: reduce to once a day
+        self.storage
+            .with_spam_names(|names| names.cleanup_stale_entries())
+            .await;
+        self.storage.save().await?;
         Ok(())
     }
 }

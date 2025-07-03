@@ -173,17 +173,17 @@ impl PolicyState {
         match &update.new_chat_member.kind {
             ChatMemberKind::Member(_) => {
                 // Screen user profile for spammer
-                let fullname = user.full_name();
-                info!("[{}] New user [{}]({}) join", chat_id, user.id, fullname);
+                let full_name: String = user.full_name();
+                info!("[{}] New user [{}]({}) join", chat_id, user.id, full_name);
                 // Rule #1: no join via chat folder
                 if update.via_chat_folder_invite_link {
-                    info!("Ban user [{fullname}]({}) via chat folder invite", user.id);
+                    info!("Ban user [{full_name}]({}) via chat folder invite", user.id);
                     Action::Ban(chat_id, user.id)
                 } else {
-                    match check_full_name_likely_spammer(&fullname) {
+                    match check_full_name_likely_spammer(&full_name) {
                         // Rule #2: no high risk name
                         SpamLikelihood::High => {
-                            info!("Ban user [{fullname}]({}) for their name", user.id);
+                            info!("Ban user [{full_name}]({}) for their name", user.id);
                             Action::Ban(chat_id, user.id)
                         }
                         // Rule #2: no medium risk name + empty handle + empty avatar
@@ -197,11 +197,21 @@ impl PolicyState {
                                     .unwrap_or_default() =>
                         {
                             info!(
-                                "Ban user [{fullname}]({}) for their name & empty handle/avator",
+                                "Ban user [{full_name}]({}) for their name & empty handle/avator",
                                 user.id
                             );
                             Action::Ban(chat_id, user.id)
                         }
+                        // Rule #3: no deny-listed name
+                        _ if self
+                            .db
+                            .with_spam_names(|names| names.has_encountered(&full_name))
+                            .await =>
+                        {
+                            info!("Ban user [{full_name}]({}) for deny-listed name", user.id);
+                            Action::Ban(chat_id, user.id)
+                        }
+                        // Otherwise, allow them
                         _ => {
                             self.db.update_user(&user.id, SpamState::default()).await;
                             Action::Accept

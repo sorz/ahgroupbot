@@ -14,7 +14,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::antispam::SpamState;
+use crate::antispam::{SpamState, spam_names::SpamNames};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct AhCount {
@@ -32,6 +32,7 @@ impl AhCount {
 pub struct Data {
     pub last_ah: Option<AhCount>,
     pub users: HashMap<UserId, SpamState>,
+    pub spam_names: SpamNames,
     pub allowed_stickers: HashSet<String>, // file_id
 }
 
@@ -82,7 +83,7 @@ impl Storage {
         })
     }
 
-    pub(crate) async fn save(&mut self) -> anyhow::Result<()> {
+    pub(crate) async fn save(&self) -> anyhow::Result<()> {
         self.inner.lock().await.save().await
     }
 
@@ -142,6 +143,14 @@ impl Storage {
         f(iter)
     }
 
+    pub(crate) async fn with_spam_names<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut SpamNames) -> R,
+    {
+        let mut inner = self.inner.lock().await;
+        f(&mut inner.data.spam_names)
+    }
+
     pub(crate) async fn add_allowed_sticker(&self, file_id: String) {
         self.inner
             .lock()
@@ -166,7 +175,7 @@ async fn test_storage() {
     use crate::antispam::SPAM_THREHOLD;
     let temp_dir = tempfile::tempdir().unwrap();
     let path = temp_dir.path().join("test.json");
-    let mut storage = Storage::open(&path).await.unwrap();
+    let storage = Storage::open(&path).await.unwrap();
 
     // Ah count
     storage
