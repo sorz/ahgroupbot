@@ -8,10 +8,10 @@ use tokio::time::MissedTickBehavior;
 
 use crate::{Actions, SpamState, storage::Storage};
 
-static CHECK_INTERVAL: Duration = Duration::from_secs(20 * 60);
+static CHECK_INTERVAL: Duration = Duration::from_secs(10 * 60);
 static MIN_AUTHENTIC_USERS: usize = 10;
 static UID_PERCENTILE: f32 = 98.0;
-static NEW_USER_GRACE_TIME: Duration = Duration::from_secs(3600);
+static NEW_USER_GRACE_TIME: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug)]
 pub struct BackgroundSpamCheck {
