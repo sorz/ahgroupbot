@@ -105,6 +105,9 @@ impl PolicyState {
             .sum();
         let spam_state = self.db.update_user(&user.id, spam_state).await;
         if spam_state.is_spam() {
+            self.db
+                .with_spam_names(|name| name.encounter(user.full_name()))
+                .await;
             return Action::DeleteAndBan(chat_id, message.id, user.id);
         }
 
@@ -231,6 +234,12 @@ impl PolicyState {
                     update.from.full_name()
                 );
                 self.db.remove_user(&user.id).await;
+                if !update.from.is_bot {
+                    // Exclude bot itself. We don't want add regex-blocked names into the name list.
+                    self.db
+                        .with_spam_names(|names| names.encounter(user.full_name()))
+                        .await;
+                }
                 Action::Accept
             }
             _ => Action::Accept,
