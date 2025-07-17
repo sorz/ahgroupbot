@@ -38,7 +38,10 @@ static RE_SPAM_NO_RISK: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"阿|啊|[aA]{3,}|[aA][hH]+").unwrap());
 
 static RE_SPAM_FULL_NAME_HIGH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"🔥|看(主|竹)页|会(员|員)|飛机|群(發|发)|达利|^dali|°$|[\u206a-\u206f]").unwrap()
+    Regex::new(concat!(
+        r"🔥|👍|📲|看(主|竹)页|会(员|員)|飛机|ㄒɡ|群(發|发)|(引|吲)流|推广|",
+        r"达利|^dali|°$|[╭-╰]|[\u206a-\u206f]"
+    )).unwrap()
 });
 
 static RE_SPAM_FULL_NAME_MEDIUM: LazyLock<Regex> =
