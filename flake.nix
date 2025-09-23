@@ -62,6 +62,11 @@
             # pkgs.ripgrep
           ];
         };
+
+        formatter = pkgs.nixfmt-tree;
       }
-    );
+    )
+    // {
+      nixosModules.default = import ./nixos.nix self;
+    };
 }
