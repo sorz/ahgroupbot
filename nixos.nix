@@ -3,7 +3,6 @@ self:
   lib,
   pkgs,
   config,
-  inputs,
   ...
 }:
 let
@@ -55,13 +54,26 @@ in
         RestartSec = 30;
         LoadCredential = [ "token:${cfg.apiTokenFile}" ];
 
+        PrivateDevices = true;
         ProtectSystem = "strict";
         ProtectHome = true;
-        PrivateTmp = true;
-        NoNewPrivileges = true;
-        CapabilityBoundingSet = "";
+        ProtectHostname = true;
+        ProtectClock = true;
+        ProtectProc = "invisible";
+        ProtectKernelModules = true;
+        ProtectKernelLogs = true;
+        ProtectKernelTunables = true;
+        ProtectControlGroups = true;
+        RestrictRealtime = true;
+        RestrictNamespaces = true;
+        RestrictSUIDSGID = true;
+        RestrictAddressFamilies = "AF_INET AF_INET6";
         LockPersonality = true;
+        NoNewPrivileges = true;
         MemoryDenyWriteExecute = true;
+        CapabilityBoundingSet = "";
+        SystemCallArchitectures = "native";
+        SystemCallFilter = "~@obsolete @clock @cpu-emulation @debug @keyring @module @mount @raw-io @swap";
       };
       environment = {
         RUST_LOG = "ahgroupbot=${cfg.logLevel},warn";
