@@ -7,7 +7,7 @@ self:
 }:
 let
   cfg = config.services.ahgroupbot;
-  defaultPkg = self.packages.${pkgs.system}.default;
+  defaultPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   options.services.ahgroupbot = {
